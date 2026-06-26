@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIS Window Quote Decoder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════
+   TOKEN SYSTEM
+═══════════════════════════════════════════ */
+:root {
+  --bg:           #080910;
+  --surface:      #0e1018;
+  --card:         #131420;
+  --card-hover:   #191a28;
+  --border:       #1d1f30;
+  --border-hi:    #2e3158;
+  --accent:       #3d6af5;
+  --accent-b:     #6d4ff5;
+  --accent-dim:   rgba(61,106,245,0.13);
+  --accent-glow:  0 0 0 3px rgba(61,106,245,0.18);
+  --ok:           #1fb86e;
+  --ok-dim:       rgba(31,184,110,0.1);
+  --warn:         #e8a020;
+  --warn-dim:     rgba(232,160,32,0.12);
+  --danger:       #e0445a;
+  --t1:           #e8eaf0;
+  --t2:           #888ead;
+  --t3:           #3e4268;
+  --upvc-bg:      rgba(61,106,245,0.12);
+  --upvc-fg:      #7090f8;
+  --alum-bg:      rgba(232,160,32,0.12);
+  --alum-fg:      #e8a020;
+  --glass-bg:     rgba(109,79,245,0.12);
+  --glass-fg:     #a07cf8;
+  --r-sm:  6px;
+  --r:     12px;
+  --r-lg:  16px;
+  --shadow: 0 4px 28px rgba(0,0,0,0.5);
+}
+[data-theme="light"] {
+  --bg:           #edf0f8;
+  --surface:      #ffffff;
+  --card:         #ffffff;
+  --card-hover:   #f5f6fc;
+  --border:       #dde0ed;
+  --border-hi:    #9aabf0;
+  --accent:       #2455e0;
+  --accent-b:     #6040cc;
+  --accent-dim:   rgba(36,85,224,0.08);
+  --accent-glow:  0 0 0 3px rgba(36,85,224,0.15);
+  --ok:           #148f52;
+  --ok-dim:       rgba(20,143,82,0.08);
+  --warn:         #b07010;
+  --warn-dim:     rgba(176,112,16,0.08);
+  --danger:       #c02040;
+  --t1:           #0c0e1c;
+  --t2:           #484c6e;
+  --t3:           #9298c0;
+  --upvc-bg:      rgba(36,85,224,0.08);
+  --upvc-fg:      #2455e0;
+  --alum-bg:      rgba(176,112,16,0.1);
+  --alum-fg:      #b07010;
+  --glass-bg:     rgba(96,64,204,0.08);
+  --glass-fg:     #6040cc;
+  --shadow: 0 2px 16px rgba(0,0,0,0.08);
+}
+
+/* ═══════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--t1);
+  line-height:1.6;
+  min-height:100vh;
+  transition:background .25s,color .25s;
+  -webkit-font-smoothing:antialiased;
+}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px}
+
+/* ═══════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════ */
+.app-header{
+  position:sticky;top:0;z-index:200;
+  height:54px;padding:0 24px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  background:rgba(8,9,16,.88);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--border);
+  transition:background .25s,border-color .25s;
+}
+[data-theme="light"] .app-header{background:rgba(255,255,255,.88)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand-mark{
+  width:32px;height:32px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--accent),var(--accent-b));
+  display:flex;align-items:center;justify-content:center;
+}
+.brand-mark svg{width:17px;height:17px;stroke:white;stroke-width:2}
+.brand-name{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-.02em}
+.brand-name em{font-style:normal;color:var(--accent)}
+.hdr-right{display:flex;align-items:center;gap:6px}
+
+/* ═══════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════ */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;font-family:inherit;font-size:13px;font-weight:500;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background:transparent;color:var(--t2);cursor:pointer;
+  transition:all .15s;white-space:nowrap;text-decoration:none;
+  outline:none;
+}
+.btn:hover{background:var(--card-hover);color:var(--t1);border-color:var(--border-hi)}
+.btn:focus-visible{box-shadow:var(--accent-glow)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:.88;color:#fff}
+.btn-ghost{border-color:transparent}
+.btn-ghost:hover{background:var(--card);border-color:var(--border)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-icon{padding:7px;border-radius:var(--r-sm)}
+.btn-icon svg{width:16px;height:16px;flex-shrink:0}
+.btn-speak{
+  background:var(--ok-dim);color:var(--ok);
+  border-color:rgba(31,184,110,.22);
+}
+.btn-speak:hover{background:rgba(31,184,110,.18);border-color:var(--ok);color:var(--ok)}
+.btn-speak.active{animation:pulse-speak 1.6s ease infinite}
+@keyframes pulse-speak{
+  0%,100%{box-shadow:0 0 0 0 rgba(31,184,110,.35)}
+  50%{box-shadow:0 0 0 7px rgba(31,184,110,0)}
+}
+
+/* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ */
+.hero{
+  padding:60px 24px 44px;text-align:center;position:relative;overflow:hidden;
+}
+.hero::before{
+  content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);
+  width:640px;height:360px;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 40%,rgba(61,106,245,.14) 0%,transparent 70%);
+}
+/* Window-grid SVG watermark */
+.hero::after{
+  content:'';position:absolute;inset:0;pointer-events:none;opacity:.025;
+  background-image:
+    repeating-linear-gradient(0deg,var(--t1) 0,var(--t1) 1px,transparent 1px,transparent 80px),
+    repeating-linear-gradient(90deg,var(--t1) 0,var(--t1) 1px,transparent 1px,transparent 80px);
+}
+.hero-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 14px;margin-bottom:22px;
+  background:var(--accent-dim);border:1px solid rgba(61,106,245,.28);
+  border-radius:100px;font-size:11px;font-weight:700;
+  color:var(--accent);letter-spacing:.06em;text-transform:uppercase;
+}
+.hero-title{
+  font-size:clamp(26px,5vw,50px);font-weight:800;
+  letter-spacing:-.04em;line-height:1.1;
+  color:var(--t1);max-width:640px;margin:0 auto 14px;
+}
+.hero-title .hl{
+  background:linear-gradient(120deg,var(--accent) 20%,var(--accent-b));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero-sub{
+  font-size:15px;color:var(--t2);max-width:460px;margin:0 auto;
+  line-height:1.7;
+}
+
+/* ═══════════════════════════════════════════
+   UPLOAD ZONE
+═══════════════════════════════════════════ */
+.upload-wrap{max-width:520px;margin:0 auto 36px;padding:0 24px}
+.drop-zone{
+  position:relative;border:2px dashed var(--border-hi);
+  border-radius:var(--r-lg);padding:36px 24px;
+  text-align:center;cursor:pointer;
+  background:var(--surface);
+  transition:border-color .2s,background .2s,transform .15s;
+}
+.drop-zone:hover,.drop-zone.over{
+  border-color:var(--accent);background:var(--accent-dim);
+}
+.drop-zone.over{transform:scale(1.01)}
+.drop-zone input[type="file"]{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;cursor:pointer;
+}
+.up-icon{
+  width:46px;height:46px;margin:0 auto 14px;
+  background:var(--accent-dim);border:1px solid rgba(61,106,245,.25);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;
+  color:var(--accent);
+}
+.up-icon svg{width:22px;height:22px;stroke-width:1.6}
+.up-title{font-size:15px;font-weight:600;color:var(--t1);margin-bottom:6px}
+.up-hint{font-size:12px;color:var(--t2)}
+.up-actions{display:flex;justify-content:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.demo-link{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:12px;color:var(--t2);padding:4px 12px;
+  border:1px solid var(--border);border-radius:100px;
+  background:none;cursor:pointer;font-family:inherit;
+  transition:all .15s;
+}
+.demo-link:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-dim)}
+
+/* ═══════════════════════════════════════════
+   STATUS
+═══════════════════════════════════════════ */
+.status-wrap{max-width:520px;margin:0 auto 8px;padding:0 24px}
+.status-card{
+  display:none;align-items:center;gap:10px;
+  padding:11px 16px;border-radius:var(--r);
+  font-size:13px;font-weight:500;border:1px solid transparent;
+}
+.status-card.show{display:flex}
+.status-card.loading{background:var(--accent-dim);border-color:rgba(61,106,245,.22);color:var(--accent)}
+.status-card.ok{background:var(--ok-dim);border-color:rgba(31,184,110,.22);color:var(--ok)}
+.status-card.err{background:rgba(224,68,90,.08);border-color:rgba(224,68,90,.2);color:var(--danger)}
+.spin{
+  width:15px;height:15px;border-radius:50%;flex-shrink:0;
+  border:2px solid currentColor;border-top-color:transparent;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════════════════════════════════════
+   SUMMARY STRIP
+═══════════════════════════════════════════ */
+.summary-strip{
+  display:none;border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  background:var(--surface);padding:18px 24px;
+}
+.summary-strip.show{display:block}
+.sum-inner{
+  max-width:1200px;margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;
+}
+.sum-stats{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+.s-item{text-align:center;min-width:52px}
+.s-val{font-size:20px;font-weight:800;color:var(--t1);letter-spacing:-.03em;line-height:1.1}
+.s-lbl{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.s-div{width:1px;height:34px;background:var(--border);align-self:center}
+.sum-acts{display:flex;gap:6px;flex-wrap:wrap}
+.profile-mix{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+
+/* ═══════════════════════════════════════════
+   FILTERS BAR
+═══════════════════════════════════════════ */
+.filters-bar{
+  display:none;padding:12px 24px;
+  border-bottom:1px solid var(--border);background:var(--bg);
+}
+.filters-bar.show{display:block}
+.f-inner{
+  max-width:1200px;margin:0 auto;
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+}
+.f-search{
+  flex:1;min-width:190px;max-width:300px;
+  padding:8px 13px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--t1);font-family:inherit;font-size:13px;
+  transition:border-color .15s,box-shadow .15s;outline:none;
+}
+.f-search:focus{border-color:var(--accent);box-shadow:var(--accent-glow)}
+.f-select{
+  padding:8px 30px 8px 11px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888ead' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 9px center;
+  color:var(--t1);font-family:inherit;font-size:13px;cursor:pointer;
+  appearance:none;outline:none;transition:border-color .15s;
+}
+.f-select:focus{border-color:var(--accent)}
+.f-count{margin-left:auto;font-size:12px;color:var(--t2);font-weight:500;white-space:nowrap}
+
+/* ═══════════════════════════════════════════
+   CHIPS
+═══════════════════════════════════════════ */
+.chip{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:2px 9px;border-radius:100px;
+  font-size:11px;font-weight:600;letter-spacing:.01em;white-space:nowrap;
+}
+.chip-upvc{background:var(--upvc-bg);color:var(--upvc-fg)}
+.chip-alum{background:var(--alum-bg);color:var(--alum-fg)}
+.chip-glass{background:var(--glass-bg);color:var(--glass-fg)}
+.chip-type{background:rgba(100,104,140,.12);color:var(--t2)}
+.chip-mesh{background:var(--ok-dim);color:var(--ok)}
+.chip-warn{background:var(--warn-dim);color:var(--warn)}
+
+/* ═══════════════════════════════════════════
+   CARDS SECTION
+═══════════════════════════════════════════ */
+.cards-section{max-width:1200px;margin:0 auto;padding:22px 24px;display:none}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+
+/* ═══════════════════════════════════════════
+   ITEM CARD
+═══════════════════════════════════════════ */
+.item-card{
+  position:relative;overflow:hidden;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:18px;
+  display:flex;flex-direction:column;gap:12px;
+  cursor:pointer;transition:border-color .18s,background .18s,transform .18s,box-shadow .18s;
+}
+.item-card:hover{
+  border-color:var(--border-hi);background:var(--card-hover);
+  transform:translateY(-2px);box-shadow:var(--shadow);
+}
+/* Top accent bar – profile type color */
+.item-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--card-bar,var(--accent));border-radius:var(--r-lg) var(--r-lg) 0 0;
+  opacity:.7;
+}
+.card-upvc{--card-bar:var(--accent)}
+.card-alum{--card-bar:var(--warn)}
+
+.c-head{display:flex;align-items:flex-start;gap:11px}
+.c-num{
+  width:28px;height:28px;border-radius:8px;flex-shrink:0;
+  background:var(--accent-dim);border:1px solid rgba(61,106,245,.25);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;color:var(--accent);
+}
+.c-head-r{flex:1;min-width:0}
+.c-title{
+  font-size:13px;font-weight:600;color:var(--t1);
+  line-height:1.35;margin-bottom:6px;
+}
+.c-chips{display:flex;gap:4px;flex-wrap:wrap}
+.c-dims{
+  display:flex;align-items:center;gap:8px;
+  padding:9px 12px;background:var(--bg);border-radius:var(--r-sm);
+  font-size:12px;color:var(--t2);flex-wrap:wrap;
+}
+.c-dim-v{font-size:14px;font-weight:700;color:var(--t1);font-variant-numeric:tabular-nums}
+.c-sep{color:var(--t3)}
+.c-glass{
+  display:flex;align-items:flex-start;gap:7px;
+  font-size:12px;color:var(--t2);line-height:1.4;
+}
+.c-glass-ic{color:var(--glass-fg);flex-shrink:0;margin-top:1px}
+.c-benefits{display:flex;gap:5px;flex-wrap:wrap}
+.btag{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:3px 8px;border-radius:100px;
+  background:var(--ok-dim);color:var(--ok);font-size:11px;font-weight:500;
+}
+.c-foot{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding-top:10px;border-top:1px solid var(--border);margin-top:auto;
+}
+.c-price{font-size:15px;font-weight:800;color:var(--t1);letter-spacing:-.02em}
+.c-qty{font-size:11px;color:var(--t2);font-weight:500;margin-left:3px}
+.c-acts{display:flex;gap:5px}
+
+/* ═══════════════════════════════════════════
+   EMPTY STATES
+═══════════════════════════════════════════ */
+.empty{text-align:center;padding:72px 24px;color:var(--t2)}
+.empty-ico{
+  width:60px;height:60px;margin:0 auto 18px;
+  background:var(--surface);border:1px solid var(--border);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:26px;
+}
+.empty h3{font-size:17px;color:var(--t1);margin-bottom:7px}
+.empty p{font-size:13px}
+
+/* ═══════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════ */
+.modal-bg{
+  position:fixed;inset:0;z-index:400;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  display:flex;align-items:flex-end;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.modal-bg.open{opacity:1;pointer-events:auto}
+@media(min-width:640px){.modal-bg{align-items:center}}
+.modal{
+  background:var(--surface);width:100%;max-width:660px;
+  border-radius:var(--r-lg) var(--r-lg) 0 0;
+  max-height:90vh;overflow-y:auto;
+  transform:translateY(20px);
+  transition:transform .25s cubic-bezier(.34,1.4,.64,1);
+}
+.modal-bg.open .modal{transform:translateY(0)}
+@media(min-width:640px){
+  .modal{border-radius:var(--r-lg);max-height:86vh}
+}
+.modal-drag{
+  width:34px;height:4px;background:var(--border-hi);border-radius:2px;
+  margin:10px auto 0;
+}
+@media(min-width:640px){.modal-drag{display:none}}
+.modal-hdr{
+  position:sticky;top:0;background:var(--surface);
+  border-bottom:1px solid var(--border);padding:18px 22px 16px;
+  display:flex;align-items:flex-start;gap:12px;z-index:1;
+}
+.modal-title-g{flex:1}
+.modal-title{font-size:17px;font-weight:700;color:var(--t1);margin-bottom:8px;line-height:1.3}
+.modal-chips{display:flex;gap:4px;flex-wrap:wrap}
+.modal-body{padding:22px}
+.m-section{margin-bottom:26px}
+.m-section:last-child{margin-bottom:0}
+.m-sec-title{
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin-bottom:12px;padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+.detail-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:11px;
+}
+.d-item{display:flex;flex-direction:column;gap:2px}
+.d-item.span-all{grid-column:1/-1}
+.d-lbl{font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.d-val{font-size:13px;color:var(--t1);font-weight:500}
+.d-val.hl{color:var(--accent);font-weight:700}
+.d-val.ok{color:var(--ok)}
+.benefits-list{display:flex;flex-direction:column;gap:7px}
+.b-item{
+  display:flex;gap:10px;align-items:flex-start;
+  padding:9px 13px;background:var(--card);border-radius:var(--r-sm);
+  border:1px solid rgba(31,184,110,.15);font-size:13px;color:var(--t1);
+}
+.b-ic{font-size:16px;flex-shrink:0;line-height:1.3}
+.modal-ftr{
+  position:sticky;bottom:0;background:var(--surface);
+  border-top:1px solid var(--border);padding:14px 22px;
+  display:flex;gap:8px;align-items:center;
+}
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+.toast-wrap{
+  position:fixed;bottom:22px;right:22px;z-index:800;
+  display:flex;flex-direction:column;gap:7px;align-items:flex-end;
+}
+.toast{
+  padding:11px 16px;border-radius:var(--r);
+  background:var(--surface);border:1px solid var(--border);
+  font-size:13px;font-weight:500;color:var(--t1);
+  box-shadow:var(--shadow);max-width:260px;
+  animation:toast-in .2s ease;
+}
+@keyframes toast-in{from{transform:translateX(12px);opacity:0}}
+.toast.ok{border-color:rgba(31,184,110,.3);color:var(--ok)}
+.toast.err{border-color:rgba(224,68,90,.3);color:var(--danger)}
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════ */
+@media(max-width:768px){
+  .hero{padding:36px 18px 32px}
+  .cards-section{padding:16px 14px}
+  .sum-stats{gap:14px}
+  .s-val{font-size:17px}
+  .s-div{height:28px}
+}
+@media(max-width:480px){
+  .app-header{padding:0 14px}
+  .f-search,.f-select{min-width:100%;width:100%}
+  .cards-grid{grid-template-columns:1fr}
+  .brand-name{display:none}
+  .summary-strip{padding:14px 16px}
+}
+</style>
+</head>
+<body>
+
+<!-- ─── APP SHELL ─── -->
+<div id="app">
+
+<!-- Header -->
+<header class="app-header">
+  <a class="brand" href="#" onclick="return false">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+    </div>
+    <span class="brand-name">AIS <em>Quote</em> Decoder</span>
+  </a>
+  <div class="hdr-right">
+    <button class="btn btn-ghost btn-icon" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">
+      <svg id="themeIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-pill">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+    Channel Partner Intelligence
+  </div>
+  <h1 class="hero-title">Decode Any AIS Windows<br><span class="hl">Quotation Instantly</span></h1>
+  <p class="hero-sub">Upload your PI or quotation PDF to get a product-by-product breakdown, benefits summary, and voice narration for every window and door.</p>
+</section>
+
+<!-- Upload Zone -->
+<div class="upload-wrap">
+  <div class="drop-zone" id="dropZone">
+    <input type="file" accept=".pdf" id="pdfInput">
+    <div class="up-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><polyline points="9 15 12 18 15 15"/>
+      </svg>
+    </div>
+    <div class="up-title">Upload AIS Quotation PDF</div>
+    <div class="up-hint">Drag and drop, or click to browse &middot; All processing happens in your browser</div>
+  </div>
+  <div class="up-actions">
+    <button class="demo-link" onclick="loadDemo()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Load demo quotation
+    </button>
+  </div>
+</div>
+
+<!-- Status -->
+<div class="status-wrap">
+  <div class="status-card" id="statusCard">
+    <div class="spin" id="statusSpin"></div>
+    <span id="statusMsg"></span>
+  </div>
+</div>
+
+<!-- Summary Strip -->
+<div class="summary-strip" id="sumStrip">
+  <div class="sum-inner">
+    <div class="sum-stats">
+      <div class="s-item"><div class="s-val" id="sItems">0</div><div class="s-lbl">Line Items</div></div>
+      <div class="s-div"></div>
+      <div class="s-item"><div class="s-val" id="sArea">0</div><div class="s-lbl">Total m²</div></div>
+      <div class="s-div"></div>
+      <div class="s-item"><div class="s-val" id="sWeight">0</div><div class="s-lbl">Total kg</div></div>
+      <div class="s-div"></div>
+      <div class="s-item"><div class="s-val" id="sValue">—</div><div class="s-lbl">Quote Value</div></div>
+      <div class="s-div"></div>
+      <div class="s-item">
+        <div class="profile-mix" id="sMix"></div>
+        <div class="s-lbl" style="margin-top:6px">Profile Mix</div>
+      </div>
+    </div>
+    <div class="sum-acts">
+      <button class="btn btn-sm" onclick="doExportJSON()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        JSON
+      </button>
+      <button class="btn btn-sm" onclick="doExportCSV()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
+      <button class="btn btn-sm" onclick="doCopyAll()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copy All
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="filters-bar" id="filtersBar">
+  <div class="f-inner">
+    <input class="f-search" id="fSearch" type="text" placeholder="Search name, glass, profile, type…" oninput="applyFilters()">
+    <select class="f-select" id="fType" onchange="applyFilters()">
+      <option value="">All Types</option>
+      <option value="casement">Casement</option>
+      <option value="sliding">Sliding</option>
+      <option value="tilt">Tilt &amp; Turn</option>
+      <option value="fixed">Fixed</option>
+      <option value="door">Door</option>
+      <option value="arch">Arch</option>
+    </select>
+    <select class="f-select" id="fProfile" onchange="applyFilters()">
+      <option value="">All Profiles</option>
+      <option value="upvc">uPVC</option>
+      <option value="alum">Aluminium</option>
+    </select>
+    <select class="f-select" id="fMesh" onchange="applyFilters()">
+      <option value="">Mesh: All</option>
+      <option value="yes">With Mesh</option>
+      <option value="no">No Mesh</option>
+    </select>
+    <span class="f-count" id="fCount"></span>
+  </div>
+</div>
+
+<!-- Cards Section -->
+<div class="cards-section" id="cardsSection">
+  <div class="cards-grid" id="cardsGrid"></div>
+  <div class="empty" id="emptyFilter" style="display:none">
+    <div class="empty-ico">🔍</div>
+    <h3>No matching items</h3>
+    <p>Try adjusting your search or filter criteria</p>
+  </div>
+</div>
+
+<!-- Initial Empty -->
+<div class="empty" id="emptyInit">
+  <div class="empty-ico">📋</div>
+  <h3>No quotation loaded</h3>
+  <p>Upload a PDF or load the demo quotation above to begin</p>
+</div>
+
+</div><!-- #app -->
+
+<!-- ─── MODAL ─── -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modal" role="dialog" aria-modal="true">
+    <div class="modal-drag"></div>
+    <div class="modal-hdr">
+      <div class="modal-title-g">
+        <div class="modal-title" id="mTitle">Details</div>
+        <div class="modal-chips" id="mChips"></div>
+      </div>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal()" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-ftr">
+      <button class="btn btn-speak btn-sm" id="mSpeakBtn" onclick="speakCurrent()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        Speak Summary
+      </button>
+      <button class="btn btn-sm" onclick="copyCurrentSummary()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copy
+      </button>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ─── JAVASCRIPT ─── -->
+<script>
+'use strict';
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PDF.JS INIT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   STATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const S = { items:[], filtered:[], current:null, speaking:false, speakBtn:null };
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   DEMO DATA  (mirrors actual AIS R2 uPVC + R4 Aluminium)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const DEMO = [
+  {slNo:1,designName:'TILT AND TURN',windowType:'Tilt & Turn',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WALNUT',series:'AIS ECO 62MM CASEMENT SERIES',width:750,height:1500,areaSqft:12.11,area:1.124,weight:45.85,glass:'(1) AIS DGU LAM – 4MM CTG + 1.52MM ACOUSTIC PVB + 4MM CTG + 10MM ARGON GAP + 6MM CTG',infill:'(1) AIS DGU LAM – 4MM CTG + 1.52MM ACOUSTIC PVB + 4MM CTG + 10MM ARGON GAP + 6MM CTG',meshType:'No',mesh:'No',handleType:'Window Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:39748,amount:39748,remarks:''},
+  {slNo:2,designName:'SLIDER WINDOW WITH TOP FIX',windowType:'Sliding',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'GOLDEN OAK',series:'AIS ECOPRIME 62MM SLIDING SERIES',width:1300,height:2100,areaSqft:29.39,area:2.730,weight:94.41,glass:'(1,2,3,4) AIS Stronglas - 5MM BRONZE TINTED TG',infill:'(1,2,3,4) AIS Stronglas - 5MM BRONZE TINTED TG',meshType:'(5) AIS-FIBRE MESH',mesh:'Yes',handleType:'Sliding Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:59142,amount:59142,remarks:''},
+  {slNo:3,designName:'SLIDER DOOR',windowType:'Sliding Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM SLIDING SERIES',width:1800,height:2250,areaSqft:43.59,area:4.050,weight:141.0,glass:'(1,2) AIS Stronglas - 6MM Clear Toughned',infill:'(1,2) AIS Stronglas - 6MM Clear Toughned',meshType:'(3,4) AIS-SS MESH',mesh:'Yes',handleType:'Sliding Espag Handle, D Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:58989,amount:58989,remarks:''},
+  {slNo:4,designName:'CASEMENT DOOR',windowType:'Casement Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:900,height:2250,areaSqft:21.80,area:2.025,weight:71.68,glass:'(1) AIS DGU - 5MM CTG + 14mm (Silver Spacer + 18mm White Georgian Bar + Argon Gap) + 5MM CTG',infill:'(1) AIS DGU - 5MM CTG + 14mm (Silver Spacer + 18mm White Georgian Bar + Argon Gap) + 5MM CTG',meshType:'No',mesh:'No',handleType:'Casement Double Side Door Handle',handleColor:'WHITE',lockingType:'Multi Point MVD Locking',fittingsSupplier:'AIS HW',qty:1,rate:48234,amount:48234,remarks:''},
+  {slNo:5,designName:'BAY WINDOW',windowType:'Bay Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'MAHOGANY',series:'AIS ECOPRIME 62MM CASEMENT SERIES',width:2400,height:1500,areaSqft:38.75,area:3.600,weight:135.7,glass:'(1,2,3) AIS Stronglas- 6MM ECO SENSE ENHANCE SPRING PLUS TG',infill:'(1,2,3) AIS Stronglas- 6MM ECO SENSE ENHANCE SPRING PLUS TG',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:61481,amount:61481,remarks:''},
+  {slNo:6,designName:'TWIN SASH',windowType:'Twin Sash',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'ANTHRACITE GREY',series:'AIS ECOPRIME 112MM CASEMENT TWIN SASH SERIES',width:1300,height:1500,areaSqft:20.99,area:1.950,weight:74.72,glass:'(1,2) AIS Stronglas - 5MM DARK GREY TINTED TG',infill:'(1,2) AIS Stronglas - 5MM DARK GREY TINTED TG',meshType:'(3,4) AIS-PET RESISTANCE MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:62383,amount:62383,remarks:''},
+  {slNo:7,designName:'TOP HUNG CUM LOUVERS',windowType:'Louvre',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:650,height:2250,areaSqft:15.75,area:1.463,weight:53.77,glass:'(1) AIS Stronglas - 5MM FROSTED TG (2) AIS LAM - 4MM CTG + 1.52MM MILKY PVB + 4MM CTG',infill:'(1) AIS Stronglas - 5MM FROSTED TG (2) AIS LAM - 4MM CTG + 1.52MM MILKY PVB + 4MM CTG',meshType:'(0) PULL DOWN MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:27334,amount:27334,remarks:'6 INCH EXHAUST CUT AT MIDDLE CENTER'},
+  {slNo:8,designName:'FIXED ARCH CUM FRENCH WINDOW',windowType:'Arch Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:1300,height:1500,areaSqft:19.10,area:1.774,weight:59.60,glass:'(1,2,3) AIS Stronglas - 6MM Clear Toughned',infill:'(1,2,3) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:28245,amount:28245,remarks:''},
+  {slNo:9,designName:'SLIDE AND FOLD',windowType:'Slide & Fold',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO INVENTA SLIDE & FOLD',width:3000,height:2250,areaSqft:72.66,area:6.750,weight:172.3,glass:'(1,2,3,4) AIS Stronglas - 6MM Clear Toughned',infill:'(1,2,3,4) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Fold & Slide Lockable Handle',handleColor:'WHITE',lockingType:'N/A',fittingsSupplier:'AIS HW',qty:1,rate:231363,amount:231363,remarks:''},
+  {slNo:10,designName:'ALN 130 DOOR',windowType:'Sliding Door',profileMaterial:'Aluminium',profileType:'Aluminium',profileColor:'AIS_AL_Silver Grey',series:'ALN - 130MM SLIDING SERIES',width:2400,height:3000,areaSqft:77.50,area:7.200,weight:433.2,glass:'(1,2) AIS DGU - 10MM CTG + 20MM AIR GAP + 12MM CTG',infill:'(1,2) AIS DGU - 10MM CTG + 20MM AIR GAP + 12MM CTG',meshType:'No',mesh:'No',handleType:'Sliding Panel Lock Mechanism',handleColor:'BLACK',lockingType:'N/A',fittingsSupplier:'AIS HW',qty:1,rate:314809,amount:314809,remarks:''},
+  {slNo:11,designName:'G2G CORNER WINDOW',windowType:'Corner Window',profileMaterial:'Aluminium',profileType:'Aluminium',profileColor:'AIS_AL_Phantom Grey',series:'REGAL SELECT - 45MM CASEMENT DOOR SERIES',width:2600,height:2400,areaSqft:67.17,area:6.240,weight:186.9,glass:'(1,2) AIS Stronglas - 12MM Clear Toughned',infill:'(1,2) AIS Stronglas - 12MM Clear Toughned',meshType:'No',mesh:'No',handleType:'N/A',handleColor:'N/A',lockingType:'N/A',fittingsSupplier:'AIS HW',qty:1,rate:71795,amount:71795,remarks:'GLASS TO GLASS JOINT L TYPE'},
+];
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PDF EXTRACTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+async function extractPDF(file) {
+  if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js not loaded. Check your internet connection.');
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let full = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page    = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const items   = content.items.slice().sort((a, b) => {
+      const dy = Math.round(b.transform[5] / 4) - Math.round(a.transform[5] / 4);
+      return dy !== 0 ? dy : a.transform[4] - b.transform[4];
+    });
+    const lines = []; let lineY = null, lineTxt = '';
+    for (const it of items) {
+      const y = Math.round(it.transform[5] / 4);
+      if (lineY !== null && Math.abs(y - lineY) > 1) {
+        if (lineTxt.trim()) lines.push(lineTxt.trim());
+        lineTxt = '';
+      }
+      lineTxt += (it.str || '') + ' ';
+      lineY = y;
+    }
+    if (lineTxt.trim()) lines.push(lineTxt.trim());
+    full += lines.join('\n') + '\n[PAGE]\n';
+  }
+  return full;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PARSER  — AIS Windows PI format
+   Sources:
+     Page 3 summary: Design Ref, Product, W, H, Qty, Mesh, Glass, Rate, Amount
+     Pages 4+ detail: Design Name, Series, Area(sqft), Weight, Profile Color,
+                       Infill, MeshType, Handle, Locking, Fittings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function parseQuotation(rawText) {
+  const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const sumRows  = parseSummaryRows(lines);
+  const detItems = parseDetailItems(lines);
+  const merged   = mergeAll(sumRows, detItems);
+  merged.forEach(finalizeItem);
+  return merged.filter(i => i.designName || (i.width && i.height));
+}
+
+/* ── PAGE 3: Summary table ─────────────────────────────────────────
+   Each row accumulates until the next row-start line.
+   After join, glass is reconstructed as: text-before-rate + text-after-amount
+   (because rate/amount cols are single-line tall cells; glass cell wraps below them)
+──────────────────────────────────────────────────────────────────── */
+function parseSummaryRows(lines) {
+  const rows = []; let active = false, buf = [], slNo = 0;
+  const flush = () => {
+    if (buf.length && slNo > 0) {
+      const r = _extractSumRow(buf.join(' ').replace(/\s+/g,' ').trim(), slNo);
+      if (r) rows.push(r);
+    }
+    buf = []; slNo = 0;
+  };
+  for (const ln of lines) {
+    const t = ln.trim();
+    if (/price and quantity summary/i.test(t)) { active = true; continue; }
+    if (!active) continue;
+    if (/^(?:sales line details|total qty|total area|basic value|grand total)/i.test(t)) { flush(); break; }
+    if (/^(?:sl\.?\s*$|no\.?\s*$|design ref$|product$|location$|width$|height$|qty$|mesh$|glass$|rate\s*\(|amount\s*\()/i.test(t)) continue;
+    // New row: 1-2 digit number then space then uppercase letter or digit
+    const rowStart = t.match(/^(\d{1,2})\s+[A-Z3]/);
+    if (rowStart && parseInt(rowStart[1]) >= 1 && parseInt(rowStart[1]) <= 99) {
+      flush(); slNo = parseInt(rowStart[1]); buf = [t];
+    } else if (buf.length > 0) { buf.push(t); }
+  }
+  flush();
+  return rows;
+}
+
+function _extractSumRow(full, slNo) {
+  // product type
+  const pmM = full.match(/\b(uPVC|Aluminium)\b/i);
+  const pm  = pmM ? (/alumin/i.test(pmM[1]) ? 'Aluminium' : 'uPVC') : '';
+  // design ref = text between slNo and product type (uppercase only — strip lowercase wrapping)
+  let designRef = '';
+  if (pmM) {
+    const raw = full.substring(String(slNo).length + 1, full.indexOf(pmM[0])).trim();
+    const m   = raw.match(/^([A-Z0-9][A-Z0-9\s&\-\/3T]+)/);
+    designRef = m ? m[1].trim() : raw.trim();
+  }
+  // text after product
+  const afterPM = pmM ? full.substring(full.indexOf(pmM[0]) + pmM[0].length).trim() : full;
+  // mesh
+  const meshM = afterPM.match(/\b(Yes|No)\b/i);
+  const mesh  = meshM ? (meshM[1][0].toUpperCase() + meshM[1].slice(1).toLowerCase()) : 'No';
+  // width / height from text before mesh
+  const preMesh = meshM ? afterPM.substring(0, afterPM.search(/\b(?:Yes|No)\b/i)) : afterPM;
+  const wh = (preMesh.match(/\b(\d{3,4})\b/g)||[]).map(Number).filter(n=>n>=200&&n<=9999);
+  // qty
+  const qM  = preMesh.match(/\b(\d{1,2})\b/); const qty = qM ? parseInt(qM[1]) : 1;
+  // rate + amount using MATCH INDICES (avoids the embedded-numbers problem)
+  const moneyRe = /\b(\d{1,3}(?:,\d{2,3})+)\b/g;
+  const allM = [...full.matchAll(moneyRe)];
+  let rate=0, amount=0, g1='', g2='';
+  if (allM.length >= 2) {
+    const rM = allM[allM.length-2], aM = allM[allM.length-1];
+    rate   = parseFloat(rM[1].replace(/,/g,''));
+    amount = parseFloat(aM[1].replace(/,/g,''));
+    // glass = part before rate + part after amount
+    const meshEnd = full.search(/\b(?:Yes|No)\b/i) + (meshM ? meshM[1].length : 2);
+    g1 = full.substring(meshEnd, rM.index).trim();
+    g2 = full.substring(aM.index + aM[0].length).trim();
+  } else if (allM.length === 1) {
+    rate = amount = parseFloat(allM[0][1].replace(/,/g,''));
+    const meshEnd = full.search(/\b(?:Yes|No)\b/i) + (meshM ? meshM[1].length : 2);
+    g1 = full.substring(meshEnd, allM[0].index).trim();
+  }
+  const glass = (g1 + ' ' + g2).replace(/\s+/g,' ').trim();
+  return { slNo, designRef, designName: designRef, profileMaterial: pm, width: wh[0]||0, height: wh[1]||0, qty, mesh, glass, rate, amount };
+}
+
+/* ── PAGES 4+: Detail section ──────────────────────────────────────
+   Item start: "N. DESIGN NAME [qty rate amt]"
+   Size:       "Size : W = 750.00; H = 1500.00"
+   Series:     "AIS ECO 62MM CASEMENT SERIES"  (not a kv pair)
+   Area+Wt:    "Area : 12.11 Sqft. Weight: 45.854 Kg"  (area in Sqft!)
+   Infill:     "Infill : (1) AIS DGU LAM – …"  (may wrap)
+   MeshType:   "MeshType : No"                 (single-word key)
+   End:        "1 39,748 39,748"               (qty rate amount)
+──────────────────────────────────────────────────────────────────── */
+function parseDetailItems(lines) {
+  const items = []; let cur=null, infillBuf='', infillOn=false;
+  const flushItem = () => {
+    if (!cur) return;
+    if (infillOn && infillBuf.trim()) cur.infill = infillBuf.trim();
+    items.push(cur); cur=null; infillBuf=''; infillOn=false;
+  };
+  for (let i=0; i<lines.length; i++) {
+    const t = lines[i].trim(); if (!t) continue;
+    // stop at T&C
+    if (/^(?:terms and conditions|cancellation policy|payment terms|warranty|bank details|force majeure)/i.test(t)) { flushItem(); break; }
+    // noise
+    if (/^view from inside$|^\d+ of \d+$|^aisgs-|^opportunity no\b|^responsible$|^salesperson$/i.test(t)) continue;
+    if (/^sl\.?\s*no\s+sales|^sales\s+line\s+details$|^amount\s*\(\s*inr|^rate\s*\(\s*inr|^qty$/i.test(t)) continue;
+
+    /* ── NEW ITEM: "N. DESIGN NAME" ─── */
+    const itemM = t.match(/^(\d{1,3})\.\s+([A-Z0-9][A-Z0-9\s&\/\-\+3T]+?)(?:\s+(\d{1,2})\s+([\d,]+)\s+([\d,]+))?\s*$/);
+    if (itemM && /[A-Z]/.test(itemM[2]) && itemM[2].trim().length > 1) {
+      flushItem();
+      cur = { slNo:parseInt(itemM[1]), designName:itemM[2].trim() };
+      if (itemM[3]) { cur.qty=parseInt(itemM[3]); cur.rate=parseFloat(itemM[4].replace(/,/g,'')); cur.amount=parseFloat(itemM[5].replace(/,/g,'')); }
+      continue;
+    }
+    if (!cur) continue;
+
+    /* ── SIZE ── */
+    const szM = t.match(/Size\s*:\s*W\s*=?\s*(\d+\.?\d*)\s*[;,]?\s*H\s*=?\s*(\d+\.?\d*)/i) || t.match(/W\s*=\s*(\d+\.?\d*).*H\s*=\s*(\d+\.?\d*)/i);
+    if (szM && !cur.width) { cur.width=parseFloat(szM[1]); cur.height=parseFloat(szM[2]); continue; }
+
+    /* ── AREA + WEIGHT (sqft → sqm) ── */
+    const awM = t.match(/Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft\.?\s+Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
+    if (awM) { cur.areaSqft=parseFloat(awM[1]); cur.area=+(parseFloat(awM[1])*0.0929).toFixed(3); cur.weight=parseFloat(awM[2]); continue; }
+    const arM = t.match(/^Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft\./i);
+    if (arM && !cur.area) { cur.areaSqft=parseFloat(arM[1]); cur.area=+(parseFloat(arM[1])*0.0929).toFixed(3); continue; }
+    const wtM = t.match(/^Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
+    if (wtM && !cur.weight) { cur.weight=parseFloat(wtM[1]); continue; }
+
+    /* ── SERIES LINE ── */
+    if (!cur.series && (/^(?:AIS|REGAL|ALN)\s+.+(?:SERIES|FOLD)\s*$/i.test(t)||/^AIS\s+(?:ECO|ECOPRIME|REGAL|INVENTA)/i.test(t)||/^REGAL\s+(?:SELECT|NEO)/i.test(t)||/^ALN\s*[-–]\s*\d+/i.test(t))) { cur.series=t; continue; }
+
+    /* ── QTY RATE AMOUNT ── */
+    const qraM = t.match(/^(\d{1,2})\s+([\d,]+)\s+([\d,]+)\s*$/);
+    if (qraM && cur.qty==null) { cur.qty=parseInt(qraM[1]); cur.rate=parseFloat(qraM[2].replace(/,/g,'')); cur.amount=parseFloat(qraM[3].replace(/,/g,'')); continue; }
+
+    /* ── INFILL CONTINUATION ── */
+    if (infillOn) {
+      if (/^[A-Za-z][A-Za-z\s\/]{1,35}\s*:/.test(t) && !/^\s*\(/.test(t)) { cur.infill=infillBuf.trim(); infillOn=false; infillBuf=''; }
+      else { infillBuf+=' '+t; continue; }
+    }
+
+    /* ── KEY : VALUE ── */
+    const kv = t.match(/^([^:]{1,45}?)\s*:\s*(.+)$/);
+    if (kv) {
+      const k=kv[1].trim(), v=kv[2].trim();
+      if      (/^infill$/i.test(k))                    { infillBuf=v; infillOn=true; }
+      else if (/^design name$/i.test(k))               cur.designName       = v;
+      else if (/^design ref$/i.test(k))                cur.designRef        = v;
+      else if (/^series$/i.test(k))                    cur.series           = v;
+      else if (/^profile type$/i.test(k))              cur.profileType      = v;
+      else if (/^profile colou?r$/i.test(k))           cur.profileColor     = v;
+      else if (/^glass type$/i.test(k))                cur.glassType        = v;
+      else if (/^infill\s*([1-4])$/i.test(k))         cur['infill'+k.match(/\d/)[0]] = v;
+      else if (/^meshtype$/i.test(k))                  cur.meshType         = v; // "MeshType" (no space)
+      else if (/^mesh\s+type$/i.test(k))               cur.meshType         = v;
+      else if (/^handle type$/i.test(k))               cur.handleType       = v.replace(/\bS\d+-/g,'').replace(/,\s*S\d+-/g,', ');
+      else if (/^handle colou?r$/i.test(k))            cur.handleColor      = v;
+      else if (/^locking type$/i.test(k))              cur.lockingType      = v;
+      else if (/^fittings supplier$/i.test(k))         cur.fittingsSupplier = v;
+      else if (/^qty$|^quantity$/i.test(k))            cur.qty              = parseInt(v)||1;
+      else if (/rate.*inr|^rate$/i.test(k)&&!/amount/i.test(k)) cur.rate   = parseFloat(v.replace(/[,₹\s]/g,''))||0;
+      else if (/amount.*inr|^amount$/i.test(k))        cur.amount           = parseFloat(v.replace(/[,₹\s]/g,''))||0;
+      else if (/^area$/i.test(k))                      cur.area             = parseFloat(v)||0;
+      else if (/^weight$/i.test(k))                    cur.weight           = parseFloat(v)||0;
+      else if (/^remarks?$/i.test(k))                  cur.remarks          = v;
+      else if (/^width$/i.test(k))                     cur.width            = parseFloat(v)||0;
+      else if (/^height$/i.test(k))                    cur.height           = parseFloat(v)||0;
+    }
+  }
+  flushItem();
+  return items;
+}
+
+/* ── MERGE ─────────────────────────────────────────────────────────
+   Use Set of unique slNos to avoid index-mismatch duplicates.
+   Detail takes priority for all spec fields.
+   Summary provides: financial data, glass (if detail has no infill),
+   mesh Yes/No, profile material (backup), width/height (backup).
+──────────────────────────────────────────────────────────────────── */
+function mergeAll(sumRows, detItems) {
+  const allNos = new Set([...sumRows.map(x=>x.slNo), ...detItems.map(x=>x.slNo)]);
+  return [...allNos].sort((a,b)=>a-b).map(n => {
+    const s = sumRows.find(x=>x.slNo===n)  || {};
+    const d = detItems.find(x=>x.slNo===n) || {};
+    // glass priority: detail infill > summary glass column
+    const glass = d.infill || d.infill1 || s.glass || d.glassType || '';
+    // mesh: summary has clean Yes/No; detail MeshType is more verbose but reliable
+    const mesh = s.mesh || (_meshFromType(d.meshType));
+    return {
+      slNo:             n,
+      designName:       d.designName       || s.designName    || s.designRef || '',
+      designRef:        d.designRef        || s.designRef     || d.designName || '',
+      windowType:       d.windowType       || '',
+      series:           d.series           || '',
+      profileType:      d.profileType      || '',
+      profileColor:     d.profileColor     || '',
+      profileMaterial:  d.profileMaterial  || s.profileMaterial || '',
+      width:            d.width            || s.width         || 0,
+      height:           d.height           || s.height        || 0,
+      area:             d.area             || s.area          || 0,
+      areaSqft:         d.areaSqft         || s.areaSqft      || 0,
+      weight:           d.weight           || 0,
+      glass,
+      infill:           d.infill           || '',
+      infill1:          d.infill1          || '',
+      infill2:          d.infill2          || '',
+      infill3:          d.infill3          || '',
+      infill4:          d.infill4          || '',
+      glassType:        d.glassType        || '',
+      mesh,
+      meshType:         d.meshType         || '',
+      handleType:       d.handleType       || '',
+      handleColor:      d.handleColor      || '',
+      lockingType:      d.lockingType      || '',
+      fittingsSupplier: d.fittingsSupplier || '',
+      qty:              d.qty              || s.qty            || 1,
+      rate:             d.rate             || s.rate           || 0,
+      amount:           d.amount           || s.amount         || 0,
+      remarks:          d.remarks          || '',
+    };
+  });
+}
+function _meshFromType(mt) {
+  if (!mt) return 'No';
+  return /^\s*no\s*$|^\s*none\s*$|^\s*n\/a\s*$/i.test(mt.trim()) ? 'No' : 'Yes';
+}
+
+/* ── INFER TYPE ─────────────────────────────────────────────────── */
+function inferType(name) {
+  const n=(name||'').toLowerCase();
+  if (/tilt.{0,5}turn/.test(n))                          return 'Tilt & Turn';
+  if (/slide.{0,5}fold|s and f\b|s\s*&\s*f\b/.test(n))  return 'Slide & Fold';
+  if (/aln\s*\d+|regal neo/.test(n))                     return 'Sliding Door';
+  if (/slider\s+door|sliding\s+door/.test(n))            return 'Sliding Door';
+  if (/3t3s|slider\s+window|sliding\s+window/.test(n))   return 'Sliding';
+  if (/twin\s*sash/.test(n))                             return 'Twin Sash';
+  if (/casement.{0,10}door|french.{0,5}door/.test(n))    return 'Casement Door';
+  if (/french\s*window|casement/.test(n))                return 'Casement';
+  if (/top\s*hung|louver|louvre/.test(n))                return 'Louvre';
+  if (/bay\s*window/.test(n))                            return 'Bay Window';
+  if (/fixed.*arch|arch/.test(n))                        return 'Arch Window';
+  if (/^cw$|curtain\s*wall/.test(n))                     return 'Curtain Wall';
+  if (/g2g|corner/.test(n))                              return 'Corner Window';
+  if (/fixed|picture/.test(n))                           return 'Fixed';
+  if (/door/.test(n))                                    return 'Door';
+  return 'Window';
+}
+
+/* ── FINALIZE ───────────────────────────────────────────────────── */
+function finalizeItem(it) {
+  if (!it.glass || it.glass.length < 3) {
+    const p=[it.infill,it.infill1,it.infill2,it.infill3,it.infill4].filter(Boolean);
+    it.glass=p.length?p.join(' + '):(it.glassType||'');
+  }
+  if (!it.mesh || it.mesh==='No') it.mesh = _meshFromType(it.meshType);
+  if (!it.area && it.width && it.height) it.area=+((it.width*it.height)/1e6).toFixed(3);
+  if (!it.windowType && it.designName) it.windowType=inferType(it.designName);
+  if (!it.profileMaterial && it.profileType) it.profileMaterial=/alumin/i.test(it.profileType)?'Aluminium':'uPVC';
+  it.profileMaterial=it.profileMaterial||'uPVC';
+  it.qty=it.qty||1; it.rate=it.rate||0;
+  it.amount=it.amount||(it.qty*it.rate);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BENEFITS ENGINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function benefits(item) {
+  const res=[];
+  const g=[item.glass,item.infill,item.infill1,item.infill2,item.infill3].filter(Boolean).join(' ').toLowerCase();
+  const ty=[item.designName,item.windowType].filter(Boolean).join(' ').toLowerCase();
+  const pt=(item.profileType||'').toLowerCase();
+  const lk=(item.lockingType||'').toLowerCase();
+
+  if (/stronglas|toughened|tempered|\bctg\b|\btg\b/.test(g)) res.push({ic:'🛡',t:'AIS Stronglas – safety-grade toughened glass'});
+  if (/dgu|lam\b/.test(g))           res.push({ic:'🌡',t:'Double glazing – improved thermal insulation'});
+  if (/acoustic\s*pvb|acoustic/.test(g)) res.push({ic:'🔇',t:'Acoustic PVB laminate – superior noise reduction'});
+  if (/argon/.test(g))               res.push({ic:'⚡',t:'Argon gas fill – maximises energy efficiency'});
+  if (/eco sense|enhance spring|solar control/.test(g)) res.push({ic:'☀️',t:'AIS Eco Sense – solar control, reduces heat gain'});
+  if (/milky pvb|milky|frosted/.test(g)) res.push({ic:'🫧',t:'Privacy glass – prevents direct visual entry'});
+  if (/tinted|bronze tinted|dark grey tinted/.test(g)) res.push({ic:'🕶',t:'Tinted glass – reduces glare & heat gain'});
+  if (/georgian bar/.test(g))        res.push({ic:'🏛',t:'Georgian bar – elegant colonial grid aesthetics'});
+  if (item.mesh==='Yes')             res.push({ic:'🦟',t:'Insect mesh – protection from mosquitoes & flies'});
+  if (/multi.?point|mvd|cremone/.test(lk)) res.push({ic:'🔐',t:'Multi-point locking – premium security'});
+  if (/tilt.{0,5}turn/.test(ty))    res.push({ic:'💨',t:'Tilt & turn – tilt for ventilation, turn for cleaning'});
+  if (/casement/.test(ty)&&!/door/.test(ty)) res.push({ic:'🌬',t:'Casement – excellent weather seal & ventilation'});
+  if (/twin\s*sash/.test(ty))        res.push({ic:'💨',t:'Twin sash – simultaneous top & bottom ventilation'});
+  if (/sliding/.test(ty)&&!/door/.test(ty)) res.push({ic:'📐',t:'Sliding – space-efficient, no swing clearance'});
+  if (/sliding door|slider door/.test(ty)) res.push({ic:'🚪',t:'Sliding door – seamless indoor-outdoor connection'});
+  if (/slide.{0,5}fold|s and f/.test(ty)) res.push({ic:'🚪',t:'Slide & fold – full wall opening, maximum light'});
+  if (/bay/.test(ty))                res.push({ic:'✨',t:'Bay window – panoramic views & premium aesthetics'});
+  if (/corner|g2g/.test(ty))         res.push({ic:'🏗',t:'Glass-to-glass corner – unobstructed panoramic view'});
+  if (/arch/.test(ty))               res.push({ic:'🏛',t:'Arch window – premium architectural statement piece'});
+  if (/curtain wall|^cw$/.test(ty))  res.push({ic:'🏢',t:'Curtain wall – maximum glazing facade solution'});
+  if (/louver|louvre/.test(ty))      res.push({ic:'🌀',t:'Louvre – directional ventilation & light control'});
+  if (/upvc|u-pvc|pvc/.test(pt))    res.push({ic:'🔧',t:'uPVC – termite-proof, low maintenance, weather resistant'});
+  if (/alumin/.test(pt))             res.push({ic:'💪',t:'Aluminium – high strength, slim sight lines, powder coated'});
+  const ar=parseFloat(item.area)||0;
+  if (ar>3) res.push({ic:'🌅',t:'Large glazing area – maximises natural light & panoramic views'});
+  return res;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SPEECH SYNTHESIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function buildSpeech(item) {
+  const bens=benefits(item).map(b=>b.t).join('; ');
+  const pm=item.profileMaterial||'uPVC';
+  const ty=item.windowType||'window';
+  const wh=item.width&&item.height?`width ${item.width} millimetres and height ${item.height} millimetres, `:'';
+  const ar=item.area?`area ${item.area} square metres, `:'';
+  const gl=item.glass?`The glass is ${item.glass}. `:'';
+  const ms=item.mesh==='Yes'?'Insect mesh is included. ':'';
+  const lk=item.lockingType&&item.lockingType!=='N/A'?`It has ${item.lockingType}. `:'';
+  return `Item ${item.slNo}. This is ${/^[aeiou]/i.test(pm)?'an':'a'} ${pm} ${ty}, ${wh}${ar}${item.series?'series '+item.series+'. ':''}${gl}${ms}${lk}${bens?'Benefits: '+bens+'.':''}`.replace(/\s+/g,' ').trim();
+}
+function speakItem(item,btn) {
+  if (!('speechSynthesis' in window)){toast('Speech not supported','err');return;}
+  if (S.speaking){speechSynthesis.cancel();S.speaking=false;document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('active'));if(S.speakBtn===btn)return;}
+  const utt=new SpeechSynthesisUtterance(buildSpeech(item));
+  utt.rate=0.95;utt.pitch=1;
+  utt.onend=utt.onerror=()=>{S.speaking=false;S.speakBtn=null;document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('active'));};
+  S.speaking=true;S.speakBtn=btn;if(btn)btn.classList.add('active');
+  speechSynthesis.speak(utt);
+}
+function speakCurrent(){if(S.current)speakItem(S.current,document.getElementById('mSpeakBtn'));}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   FILTERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function applyFilters() {
+  const q=(g('fSearch').value||'').toLowerCase();
+  const ty=g('fType').value.toLowerCase();
+  const pr=g('fProfile').value.toLowerCase();
+  const ms=g('fMesh').value.toLowerCase();
+  S.filtered=S.items.filter(it=>{
+    if(q){const h=[it.designName,it.profileType,it.glass,it.windowType,it.designRef,it.lockingType,it.handleType,it.series].filter(Boolean).join(' ').toLowerCase();if(!h.includes(q))return false;}
+    if(ty&&!(it.windowType||'').toLowerCase().includes(ty))return false;
+    if(pr){const pm=(it.profileMaterial||'').toLowerCase();if(pr==='upvc'&&!/upvc|pvc/.test(pm))return false;if(pr==='alum'&&!/alumin/.test(pm))return false;}
+    if(ms){const m=(it.mesh||'').toLowerCase();if(ms==='yes'&&m!=='yes')return false;if(ms==='no'&&m==='yes')return false;}
+    return true;
+  });
+  renderCards();
+  g('fCount').textContent=`${S.filtered.length} of ${S.items.length} shown`;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   RENDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function renderCards(){
+  const grid=g('cardsGrid'),empty=g('emptyFilter');
+  if(!S.filtered.length){grid.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  grid.innerHTML=S.filtered.map(cardHTML).join('');
+}
+function cardHTML(it){
+  const bens=benefits(it).slice(0,3);
+  const isAlum=/alumin/i.test(it.profileMaterial||'');
+  const pmCls=isAlum?'chip-alum':'chip-upvc';
+  const barCls=isAlum?'card-alum':'card-upvc';
+  const pm=it.profileMaterial||'uPVC';
+  const dims=(it.width&&it.height)?`${it.width} × ${it.height}`:'—';
+  const area=it.area?`${it.area} m²`:(it.areaSqft?`${it.areaSqft} sqft`:'');
+  const wt=it.weight?`${it.weight} kg`:'';
+  const glFull=(it.glass||'No glass data').replace(/\s+/g,' ');
+  const gl60=glFull.length>60?glFull.slice(0,60)+'…':glFull;
+  const amt=it.amount?'₹'+Number(it.amount).toLocaleString('en-IN'):'—';
+  const qty=it.qty?`×${it.qty}`:'';
+  return `<div class="item-card ${barCls}" onclick="openModal(${it.slNo})">
+  <div class="c-head">
+    <div class="c-num">${it.slNo}</div>
+    <div class="c-head-r">
+      <div class="c-title">${esc(it.designName||it.designRef||'Window Item')}</div>
+      <div class="c-chips">
+        <span class="chip ${pmCls}">${esc(pm)}</span>
+        ${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}
+        ${it.series?`<span class="chip chip-type">${esc(it.series.replace(/^AIS\s+/i,'').replace(/SERIES$/i,'').trim())}</span>`:''}
+        ${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}
+      </div>
+    </div>
+  </div>
+  <div class="c-dims">
+    <span class="c-dim-v">${dims} mm</span>
+    ${area?`<span class="c-sep">·</span><span>${area}</span>`:''}
+    ${wt?`<span class="c-sep">·</span><span>${wt}</span>`:''}
+  </div>
+  <div class="c-glass">
+    <span class="c-glass-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><polyline points="17 2 12 7 7 2"/></svg></span>
+    <span>${esc(gl60)}</span>
+  </div>
+  ${bens.length?`<div class="c-benefits">${bens.map(b=>`<span class="btag">${b.ic} ${esc(b.t)}</span>`).join('')}</div>`:''}
+  <div class="c-foot">
+    <div class="c-price">${esc(amt)}<span class="c-qty">${esc(qty)}</span></div>
+    <div class="c-acts">
+      <button class="btn btn-speak btn-sm" onclick="event.stopPropagation();cardSpeak(${it.slNo},this)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg> Speak
+      </button>
+      <button class="btn btn-sm" onclick="event.stopPropagation();openModal(${it.slNo})">Details</button>
+    </div>
+  </div>
+</div>`;
+}
+function cardSpeak(slNo,btn){const it=S.items.find(i=>i.slNo===slNo);if(it)speakItem(it,btn);}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MODAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function openModal(slNo){
+  const it=S.items.find(i=>i.slNo===slNo); if(!it)return;
+  S.current=it;
+  const isAlum=/alumin/i.test(it.profileMaterial||'');
+  g('mTitle').textContent=it.designName||it.designRef||`Item ${it.slNo}`;
+  g('mChips').innerHTML=`
+    <span class="chip ${isAlum?'chip-alum':'chip-upvc'}">${esc(it.profileMaterial||'uPVC')}</span>
+    ${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}
+    ${it.profileType?`<span class="chip chip-type">${esc(it.profileType)}</span>`:''}
+    ${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}`;
+  const flds=[
+    ['Design Ref',        it.designRef],
+    ['Series',            it.series],
+    ['Window / Door Type',it.windowType],
+    ['Profile Type',      it.profileType],
+    ['Profile Color',     it.profileColor],
+    ['Width (mm)',        it.width||null],
+    ['Height (mm)',       it.height||null],
+    ['Area (m²)',         it.area||null],
+    ['Area (Sqft)',       it.areaSqft||null],
+    ['Weight (Kg)',       it.weight||null],
+    ['Quantity',          it.qty],
+    ['Glass / Infill',    it.glass,  'span-all'],
+    ['Infill Detail',     it.infill&&it.infill!==it.glass?it.infill:null, 'span-all'],
+    ['Mesh',              it.mesh],
+    ['Mesh Type',         it.meshType],
+    ['Handle Type',       it.handleType],
+    ['Handle Color',      it.handleColor],
+    ['Locking Type',      it.lockingType],
+    ['Fittings Supplier', it.fittingsSupplier],
+    ['Rate (INR)',         it.rate?'₹'+Number(it.rate).toLocaleString('en-IN'):null,'','hl'],
+    ['Amount (INR)',       it.amount?'₹'+Number(it.amount).toLocaleString('en-IN'):null,'','hl'],
+  ].filter(f=>f[1]!=null&&f[1]!=='');
+  const bens=benefits(it);
+  g('mBody').innerHTML=`
+    <div class="m-section">
+      <div class="m-sec-title">Product Specifications</div>
+      <div class="detail-grid">
+        ${flds.map(([lbl,val,span,cls])=>`<div class="d-item${span?' '+span:''}"><span class="d-lbl">${esc(lbl)}</span><span class="d-val${cls?' '+cls:''}">${esc(String(val))}</span></div>`).join('')}
+      </div>
+    </div>
+    ${bens.length?`<div class="m-section"><div class="m-sec-title">Benefits &amp; Value Proposition</div><div class="benefits-list">${bens.map(b=>`<div class="b-item"><span class="b-ic">${b.ic}</span><span>${esc(b.t)}</span></div>`).join('')}</div></div>`:''}
+    ${it.remarks?`<div class="m-section"><div class="m-sec-title">Remarks</div><p style="font-size:13px;color:var(--t2);line-height:1.6">${esc(it.remarks)}</p></div>`:''}`;
+  g('modalBg').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeModal(){g('modalBg').classList.remove('open');document.body.style.overflow='';if(S.speaking){speechSynthesis.cancel();S.speaking=false;}document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('active'));}
+g('modalBg').addEventListener('click',e=>{if(e.target===g('modalBg'))closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SUMMARY STRIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function updateSummary(items){
+  const totArea  =items.reduce((s,i)=>s+(parseFloat(i.area)||0)*(i.qty||1),0);
+  const totWt    =items.reduce((s,i)=>s+(parseFloat(i.weight)||0)*(i.qty||1),0);
+  const totVal   =items.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+  const upvcCnt  =items.filter(i=>!/alumin/i.test(i.profileMaterial||'')).length;
+  const alumCnt  =items.filter(i=>/alumin/i.test(i.profileMaterial||'')).length;
+  g('sItems').textContent =items.length;
+  g('sArea').textContent  =totArea.toFixed(2);
+  g('sWeight').textContent=Math.round(totWt);
+  g('sValue').textContent =totVal>0?'₹'+Math.round(totVal).toLocaleString('en-IN'):'—';
+  const mix=g('sMix'); mix.innerHTML='';
+  if(upvcCnt)mix.innerHTML+=`<span class="chip chip-upvc">${upvcCnt} uPVC</span>`;
+  if(alumCnt)mix.innerHTML+=`<span class="chip chip-alum">${alumCnt} Alum</span>`;
+  show('sumStrip'); show('filtersBar');
+  g('cardsSection').style.display='block';
+  g('emptyInit').style.display='none';
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   LOAD FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+async function handleFile(file){
+  if(!file||!file.name.toLowerCase().endsWith('.pdf')){setStatus('err','Please select a valid PDF file.');return;}
+  setStatus('loading',`Reading "${file.name}"…`);
+  try{
+    const raw=await extractPDF(file);
+    setStatus('loading','Parsing quotation line items…');
+    const items=parseQuotation(raw);
+    if(!items.length){setStatus('err','No line items detected. Ensure this is an AIS Windows PI/quotation PDF.');return;}
+    loadItems(items);
+    setStatus('ok',`✓ Parsed ${items.length} line items successfully.`);
+    toast(`${items.length} items loaded`,'ok');
+  }catch(e){console.error(e);setStatus('err','Error: '+(e.message||'Unknown error'));}
+}
+function loadItems(items){S.items=items;S.filtered=[...items];updateSummary(items);applyFilters();}
+function loadDemo(){
+  const items=DEMO.map(d=>{const c=Object.assign({},d);finalizeItem(c);return c;});
+  loadItems(items);
+  setStatus('ok',`✓ Demo quotation loaded – ${items.length} items.`);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   EXPORT & COPY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function download(content,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href);toast(`Downloaded ${name}`,'ok');}
+function doExportJSON(){if(!S.filtered.length){toast('No data','err');return;}download(JSON.stringify(S.filtered,null,2),'ais-quotation.json','application/json');}
+function doExportCSV(){
+  if(!S.filtered.length){toast('No data','err');return;}
+  const H=['Sl.No.','Design Name','Type','Series','Profile','Profile Color','Width mm','Height mm','Area m²','Area sqft','Weight kg','Glass','Mesh','Mesh Type','Handle','Handle Color','Locking','Fittings','Qty','Rate INR','Amount INR','Remarks'];
+  const R=S.filtered.map(i=>[i.slNo,i.designName||'',i.windowType||'',i.series||'',i.profileType||'',i.profileColor||'',i.width||'',i.height||'',i.area||'',i.areaSqft||'',i.weight||'',i.glass||'',i.mesh||'',i.meshType||'',i.handleType||'',i.handleColor||'',i.lockingType||'',i.fittingsSupplier||'',i.qty||'',i.rate||'',i.amount||'',i.remarks||'']);
+  const csv=[H,...R].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  download(csv,'ais-quotation.csv','text/csv');
+}
+function doCopyAll(){
+  if(!S.filtered.length){toast('No data','err');return;}
+  const txt=S.filtered.map(i=>{const b=benefits(i).map(b=>b.t).join(', ');return `Item ${i.slNo}: ${i.designName||''} | ${i.profileMaterial||''} | ${i.width}×${i.height}mm | Qty ${i.qty} | ₹${(i.amount||0).toLocaleString('en-IN')}\nGlass: ${i.glass||''}\nBenefits: ${b}`;}).join('\n\n');
+  navigator.clipboard.writeText(txt).then(()=>toast('Copied','ok')).catch(()=>toast('Copy failed','err'));
+}
+function copyCurrentSummary(){if(!S.current)return;navigator.clipboard.writeText(buildSpeech(S.current)).then(()=>toast('Copied','ok')).catch(()=>toast('Failed','err'));}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   THEME / UTILITIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function toggleTheme(){
+  const dark=document.documentElement.dataset.theme==='dark';
+  document.documentElement.dataset.theme=dark?'light':'dark';
+  g('themeIco').innerHTML=dark?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>':'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+}
+function g(id){return document.getElementById(id);}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function show(id){g(id).classList.add('show');}
+let _sTimer;
+function setStatus(type,msg){
+  clearTimeout(_sTimer);
+  const card=g('statusCard'); card.className='status-card show '+type;
+  g('statusSpin').style.display=type==='loading'?'block':'none';
+  g('statusMsg').textContent=msg;
+  if(type!=='loading')_sTimer=setTimeout(()=>card.classList.remove('show'),5000);
+}
+function toast(msg,type=''){
+  const w=g('toastWrap'),t=document.createElement('div');
+  t.className='toast '+type; t.textContent=msg; w.appendChild(t);
+  setTimeout(()=>{t.style.cssText='opacity:0;transform:translateX(12px);transition:all .25s';setTimeout(()=>t.remove(),260);},2800);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   EVENT LISTENERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+g('pdfInput').addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);e.target.value='';});
+const dz=g('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+</script>
+</body>
+</html>
