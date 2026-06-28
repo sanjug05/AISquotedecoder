@@ -343,99 +343,620 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 <script>
 'use strict';
-if(typeof pdfjsLib!=='undefined') pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+if(typeof pdfjsLib!=='undefined')
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-/* ── STATE ── */
-const S={items:[],filtered:[],current:null,speaking:false,speakBtn:null,pdfDoc:null,previewMode:'svg'};
-
-/* ── DESIGN IMAGE MAP (internal only, not exposed in UI) ── */
-const IMG_MAP={
-  // 'TILT AND TURN':'https://...',
-  // 'BAY WINDOW':'https://...',
+/* ═══════════════════════════════
+   STATE
+═══════════════════════════════ */
+const S={
+  items:[],filtered:[],current:null,
+  speaking:false,speakBtn:null,
+  pdfDoc:null,previewMode:'svg',
+  toastActive:new Set()
 };
 
-/* ── DEMO DATA ── */
+/* ═══════════════════════════════
+   CONSTANTS
+═══════════════════════════════ */
+const IMG_MAP={/* 'DESIGN NAME':'https://...' — internal only, never shown in UI */};
+
 const DEMO=[
-  {slNo:1,designName:'TILT AND TURN',windowType:'Tilt & Turn',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WALNUT',series:'AIS ECO 62MM CASEMENT SERIES',width:750,height:1500,areaSqft:12.11,area:1.124,weight:45.85,glass:'(1) AIS DGU LAM – 4MM CTG + 1.52MM ACOUSTIC PVB + 4MM CTG + 10MM ARGON GAP + 6MM CTG',infill:'(1) AIS DGU LAM – 4MM CTG + 1.52MM ACOUSTIC PVB + 4MM CTG + 10MM ARGON GAP + 6MM CTG',meshType:'No',mesh:'No',handleType:'Window Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:39748,amount:39748,remarks:'',_pageNo:4,_pagePos:0},
-  {slNo:2,designName:'SLIDER WINDOW WITH TOP FIX',windowType:'Sliding',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'GOLDEN OAK',series:'AIS ECOPRIME 62MM SLIDING SERIES',width:1300,height:2100,areaSqft:29.39,area:2.730,weight:94.41,glass:'(1,2,3,4) AIS Stronglas - 5MM BRONZE TINTED TG',infill:'(1,2,3,4) AIS Stronglas - 5MM BRONZE TINTED TG',meshType:'(5) AIS-FIBRE MESH',mesh:'Yes',handleType:'Sliding Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:59142,amount:59142,remarks:'',_pageNo:4,_pagePos:1},
-  {slNo:3,designName:'SLIDER DOOR',windowType:'Sliding Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM SLIDING SERIES',width:1800,height:2250,areaSqft:43.59,area:4.050,weight:141.0,glass:'(1,2) AIS Stronglas - 6MM Clear Toughned',infill:'(1,2) AIS Stronglas - 6MM Clear Toughned',meshType:'(3,4) AIS-SS MESH',mesh:'Yes',handleType:'Sliding Espag Handle, D Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:58989,amount:58989,remarks:'',_pageNo:5,_pagePos:0},
-  {slNo:4,designName:'CASEMENT DOOR',windowType:'Casement Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:900,height:2250,areaSqft:21.80,area:2.025,weight:71.68,glass:'(1) AIS DGU - 5MM CTG + 14mm Georgian Bar + Argon Gap + 5MM CTG',infill:'(1) AIS DGU - 5MM CTG + 14mm (Silver Spacer + 18mm White Georgian Bar + Argon Gap) + 5MM CTG',meshType:'No',mesh:'No',handleType:'Casement Double Side Door Handle',handleColor:'WHITE',lockingType:'Multi Point MVD Locking',fittingsSupplier:'AIS HW',qty:1,rate:48234,amount:48234,remarks:'',_pageNo:5,_pagePos:1},
-  {slNo:5,designName:'BAY WINDOW',windowType:'Bay Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'MAHOGANY',series:'AIS ECOPRIME 62MM CASEMENT SERIES',width:2400,height:1500,areaSqft:38.75,area:3.600,weight:135.7,glass:'(1,2,3) AIS Stronglas- 6MM ECO SENSE ENHANCE SPRING PLUS TG',infill:'(1,2,3) AIS Stronglas- 6MM ECO SENSE ENHANCE SPRING PLUS TG',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:61481,amount:61481,remarks:'',_pageNo:6,_pagePos:0},
-  {slNo:6,designName:'TWIN SASH',windowType:'Twin Sash',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'ANTHRACITE GREY',series:'AIS ECOPRIME 112MM CASEMENT TWIN SASH SERIES',width:1300,height:1500,areaSqft:20.99,area:1.950,weight:74.72,glass:'(1,2) AIS Stronglas - 5MM DARK GREY TINTED TG',infill:'(1,2) AIS Stronglas - 5MM DARK GREY TINTED TG',meshType:'(3,4) AIS-PET RESISTANCE MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:62383,amount:62383,remarks:'',_pageNo:6,_pagePos:1},
-  {slNo:7,designName:'TOP HUNG CUM LOUVERS',windowType:'Louvre',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:650,height:2250,areaSqft:15.75,area:1.463,weight:53.77,glass:'(1) AIS Stronglas - 5MM FROSTED TG (2) AIS LAM - 4MM CTG + 1.52MM MILKY PVB + 4MM CTG',infill:'(1) AIS Stronglas - 5MM FROSTED TG (2) AIS LAM - 4MM CTG + 1.52MM MILKY PVB + 4MM CTG',meshType:'(0) PULL DOWN MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:27334,amount:27334,remarks:'6 INCH EXHAUST CUT AT MIDDLE CENTER',_pageNo:7,_pagePos:0},
-  {slNo:8,designName:'FIXED ARCH CUM FRENCH WINDOW',windowType:'Arch Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:1300,height:1500,areaSqft:19.10,area:1.774,weight:59.60,glass:'(1,2,3) AIS Stronglas - 6MM Clear Toughned',infill:'(1,2,3) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:28245,amount:28245,remarks:'',_pageNo:7,_pagePos:1},
-  {slNo:9,designName:'SLIDE AND FOLD',windowType:'Slide & Fold',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO INVENTA SLIDE & FOLD',width:3000,height:2250,areaSqft:72.66,area:6.750,weight:172.3,glass:'(1,2,3,4) AIS Stronglas - 6MM Clear Toughned',infill:'(1,2,3,4) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Fold & Slide Lockable Handle',handleColor:'WHITE',lockingType:'N/A',fittingsSupplier:'AIS HW',qty:1,rate:231363,amount:231363,remarks:'',_pageNo:8,_pagePos:0},
+  {slNo:1,designName:'TILT AND TURN',windowType:'Tilt & Turn',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WALNUT',series:'AIS ECO 62MM CASEMENT SERIES',width:750,height:1500,areaSqft:12.11,area:1.124,weight:45.85,glass:'(1) AIS DGU LAM – 4MM CTG + 1.52MM ACOUSTIC PVB + 4MM CTG + 10MM ARGON GAP + 6MM CTG',meshType:'No',mesh:'No',handleType:'Window Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:39748,amount:39748,remarks:'',_pageNo:4,_pagePos:0,_conf:95},
+  {slNo:2,designName:'SLIDER WINDOW WITH TOP FIX',windowType:'Sliding',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'GOLDEN OAK',series:'AIS ECOPRIME 62MM SLIDING SERIES',width:1300,height:2100,areaSqft:29.39,area:2.730,weight:94.41,glass:'(1,2,3,4) AIS Stronglas - 5MM BRONZE TINTED TG',meshType:'(5) AIS-FIBRE MESH',mesh:'Yes',handleType:'Sliding Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:59142,amount:59142,remarks:'',_pageNo:4,_pagePos:1,_conf:95},
+  {slNo:3,designName:'SLIDER DOOR',windowType:'Sliding Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM SLIDING SERIES',width:1800,height:2250,areaSqft:43.59,area:4.050,weight:141.0,glass:'(1,2) AIS Stronglas - 6MM Clear Toughned',meshType:'(3,4) AIS-SS MESH',mesh:'Yes',handleType:'Sliding Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:58989,amount:58989,remarks:'',_pageNo:5,_pagePos:0,_conf:95},
+  {slNo:4,designName:'CASEMENT DOOR',windowType:'Casement Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:900,height:2250,areaSqft:21.80,area:2.025,weight:71.68,glass:'(1) AIS DGU - 5MM CTG + 14mm Georgian Bar + Argon Gap + 5MM CTG',meshType:'No',mesh:'No',handleType:'Casement Double Side Door Handle',handleColor:'WHITE',lockingType:'Multi Point MVD Locking',fittingsSupplier:'AIS HW',qty:1,rate:48234,amount:48234,remarks:'',_pageNo:5,_pagePos:1,_conf:95},
+  {slNo:5,designName:'BAY WINDOW',windowType:'Bay Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'MAHOGANY',series:'AIS ECOPRIME 62MM CASEMENT SERIES',width:2400,height:1500,areaSqft:38.75,area:3.600,weight:135.7,glass:'(1,2,3) AIS Stronglas - 6MM ECO SENSE ENHANCE SPRING PLUS TG',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:61481,amount:61481,remarks:'',_pageNo:6,_pagePos:0,_conf:95},
+  {slNo:6,designName:'TWIN SASH',windowType:'Twin Sash',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'ANTHRACITE GREY',series:'AIS ECOPRIME 112MM CASEMENT TWIN SASH SERIES',width:1300,height:1500,areaSqft:20.99,area:1.950,weight:74.72,glass:'(1,2) AIS Stronglas - 5MM DARK GREY TINTED TG',meshType:'(3,4) AIS-PET RESISTANCE MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:62383,amount:62383,remarks:'',_pageNo:6,_pagePos:1,_conf:95},
+  {slNo:7,designName:'TOP HUNG CUM LOUVERS',windowType:'Louvre',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:650,height:2250,areaSqft:15.75,area:1.463,weight:53.77,glass:'(1) AIS Stronglas - 5MM FROSTED TG + (2) AIS LAM - 4MM CTG + 1.52MM MILKY PVB + 4MM CTG',meshType:'(0) PULL DOWN MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:27334,amount:27334,remarks:'6 INCH EXHAUST CUT AT MIDDLE CENTER',_pageNo:7,_pagePos:0,_conf:95},
+  {slNo:8,designName:'FIXED ARCH CUM FRENCH WINDOW',windowType:'Arch Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:1300,height:1500,areaSqft:19.10,area:1.774,weight:59.60,glass:'(1,2,3) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:28245,amount:28245,remarks:'',_pageNo:7,_pagePos:1,_conf:95},
+  {slNo:9,designName:'SLIDE AND FOLD',windowType:'Slide & Fold',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO INVENTA SLIDE & FOLD',width:3000,height:2250,areaSqft:72.66,area:6.750,weight:172.3,glass:'(1,2,3,4) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Fold & Slide Lockable Handle',handleColor:'WHITE',lockingType:'N/A',fittingsSupplier:'AIS HW',qty:1,rate:231363,amount:231363,remarks:'',_pageNo:8,_pagePos:0,_conf:95},
 ];
 
-/* ═══════════════════════════════════════════
-   SVG SCHEMATIC GENERATOR
-═══════════════════════════════════════════ */
+/* ═══════════════════════════════
+   UTILITIES
+═══════════════════════════════ */
+function g(id){return document.getElementById(id);}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function show(id){g(id).classList.add('show');}
+
+// money string "39,748" or "2,31,363" → number
+function normMoney(s){return parseFloat(String(s||0).replace(/[,₹\s]/g,''))||0;}
+
+// dimension: ensure positive integer mm
+function normDim(v){const n=parseFloat(v);return(n>0&&n<30000)?Math.round(n):0;}
+
+// normalize mesh field
+function normMesh(raw){
+  if(!raw)return'No';
+  return /^\s*no\s*$|^\s*none\s*$|^\s*n\/a\s*$/i.test(raw.trim())?'No':'Yes';
+}
+
+// normalize profile material
+function normMaterial(s){
+  if(!s)return'';
+  return/alumin/i.test(s)?'Aluminium':/upvc|pvc/i.test(s)?'uPVC':'';
+}
+
+// clean line: remove leading/trailing noise
+function cleanLine(s){return s.replace(/\s+/g,' ').trim();}
+
+// detect money in string
+function extractMoney(s){
+  const all=[...s.matchAll(/\b(\d{1,3}(?:,\d{2,3})+)\b/g)];
+  return all.map(m=>normMoney(m[1]));
+}
+
+// safe numeric extraction from uncertain string
+function extractNumber(s,min,max){
+  const n=parseFloat(s);
+  if(!isNaN(n)&&n>=min&&n<=max)return n;
+  return null;
+}
+
+// unique toast guard
+function toast(msg,type=''){
+  const key=msg+type;
+  if(S.toastActive.has(key))return;
+  S.toastActive.add(key);
+  setTimeout(()=>S.toastActive.delete(key),3200);
+  const w=g('toastWrap'),t=document.createElement('div');
+  t.className='toast '+type;t.textContent=msg;w.appendChild(t);
+  setTimeout(()=>{t.style.cssText='opacity:0;transform:translateX(12px);transition:all .25s';setTimeout(()=>t.remove(),260);},2800);
+}
+
+let _sT;
+function setStatus(type,msg){
+  clearTimeout(_sT);
+  const c=g('statusCard');c.className='status-card show '+type;
+  g('statusSpin').style.display=type==='loading'?'block':'none';
+  g('statusMsg').textContent=msg;
+  if(type!=='loading')_sT=setTimeout(()=>c.classList.remove('show'),6000);
+}
+
+/* ═══════════════════════════════
+   PDF EXTRACTION
+═══════════════════════════════ */
+async function extractPDF(file){
+  if(typeof pdfjsLib==='undefined')throw new Error('PDF.js not loaded. Check your internet connection.');
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  S.pdfDoc=pdf;
+  let full='';
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const content=await page.getTextContent();
+    // Sort items: descending Y (top→bottom), then ascending X (left→right)
+    const its=content.items.slice().sort((a,b)=>{
+      const dy=Math.round(b.transform[5]/3)-Math.round(a.transform[5]/3);
+      return dy!==0?dy:a.transform[4]-b.transform[4];
+    });
+    // Group into logical lines by Y proximity
+    const lines=[];let lY=null,lT='';
+    for(const it of its){
+      const y=Math.round(it.transform[5]/3);
+      if(lY!==null&&Math.abs(y-lY)>1){if(lT.trim())lines.push(lT.trim());lT='';}
+      lT+=(it.str||'')+' ';lY=y;
+    }
+    if(lT.trim())lines.push(lT.trim());
+    full+=lines.join('\n')+`\n[PAGE:${p}]\n`;
+  }
+  return full;
+}
+
+/* ═══════════════════════════════
+   PARSER — ENTRY POINT
+═══════════════════════════════ */
+function parseQuotation(rawText){
+  const lines=rawText.split('\n').map(cleanLine).filter(l=>l.length>0);
+  let sumRows=[],detItems=[];
+  try{sumRows=parseSummaryRows(lines);}catch(e){console.warn('Summary parse error:',e);}
+  try{detItems=parseDetailItems(lines);}catch(e){console.warn('Detail parse error:',e);}
+  const merged=mergeAll(sumRows,detItems);
+  merged.forEach(it=>{try{finalizeItem(it);}catch(e){console.warn('Finalize error on item',it.slNo,e);}});
+  return merged.filter(i=>i.designName||(i.width>0&&i.height>0));
+}
+
+/* ═══════════════════════════════
+   PARSER — SUMMARY TABLE (Page 3)
+═══════════════════════════════ */
+function parseSummaryRows(lines){
+  const rows=[];
+  let active=false,buf=[],slNo=0;
+
+  const flushBuf=()=>{
+    if(buf.length&&slNo>0){
+      const r=_buildSumRow(buf.join(' ').replace(/\s+/g,' ').trim(),slNo);
+      if(r)rows.push(r);
+    }
+    buf=[];slNo=0;
+  };
+
+  for(const t of lines){
+    if(/price and quantity summary/i.test(t)){active=true;continue;}
+    if(!active)continue;
+    if(/^(?:sales line details|total qty\b|total area\b|basic value\b|grand total\b)/i.test(t)){flushBuf();break;}
+    // skip column headers
+    if(/^(?:sl\.?\s*$|no\.?\s*$|design ref$|product$|location$|width$|height$|qty$|mesh$|glass$|rate\s*\(|amount\s*\()/i.test(t))continue;
+    // New row trigger: starts with 1-2 digit number + space + uppercase letter
+    const rs=t.match(/^(\d{1,2})\s+[A-Z3]/);
+    if(rs){
+      const n=parseInt(rs[1]);
+      if(n>=1&&n<=200){flushBuf();slNo=n;buf=[t];continue;}
+    }
+    if(buf.length>0)buf.push(t);
+  }
+  flushBuf();
+  return rows;
+}
+
+function _buildSumRow(full,slNo){
+  try{
+    // Profile material: uPVC or Aluminium column
+    const pmM=full.match(/\b(uPVC|Aluminium)\b/i);
+    const pm=pmM?normMaterial(pmM[1]):'';
+
+    // Design ref: text between slNo token and product material token
+    let designRef='';
+    if(pmM){
+      const raw=full.substring(String(slNo).length+1,full.indexOf(pmM[0])).trim();
+      // only keep uppercase alphanumeric — strip lowercase contamination from wrapped cells
+      const m=raw.match(/^([A-Z0-9][A-Z0-9\s&\-\/3T+]+)/);
+      designRef=m?m[1].trim():raw.trim();
+    }
+
+    // Text after profile material column
+    const afterPM=pmM?full.substring(full.indexOf(pmM[0])+pmM[0].length).trim():full;
+
+    // Mesh column: first Yes/No
+    const meshM=afterPM.match(/\b(Yes|No)\b/i);
+    const mesh=meshM?(meshM[1][0].toUpperCase()+meshM[1].slice(1).toLowerCase()):'No';
+
+    // Pre-mesh text: contains location(optional), Width, Height, Qty
+    const preMesh=meshM?afterPM.substring(0,afterPM.search(/\b(?:Yes|No)\b/i)):afterPM;
+    // Dimensions: 3-4 digit numbers in valid range
+    const dims=(preMesh.match(/\b(\d{3,4})\b/g)||[]).map(Number).filter(n=>n>=100&&n<=9999);
+    const width=dims[0]||0, height=dims[1]||0;
+    // Qty: 1-2 digit number
+    const qM=preMesh.match(/\b(\d{1,2})\b/);
+    const qty=qM?parseInt(qM[1]):1;
+
+    // Money values: use match indices for clean glass extraction
+    const moneyRe=/\b(\d{1,3}(?:,\d{2,3})+)\b/g;
+    const allM=[...full.matchAll(moneyRe)];
+    let rate=0,amount=0,glass='';
+    if(allM.length>=2){
+      const rM=allM[allM.length-2],aM=allM[allM.length-1];
+      rate=normMoney(rM[1]);amount=normMoney(aM[1]);
+      // Glass = text between mesh column end and rate start + text after amount end
+      const meshEnd=meshM?(full.search(/\b(?:Yes|No)\b/i)+meshM[1].length):0;
+      const g1=full.substring(meshEnd,rM.index).trim();
+      const g2=full.substring(aM.index+aM[0].length).trim();
+      glass=cleanLine(g1+' '+g2);
+    }else if(allM.length===1){
+      rate=amount=normMoney(allM[0][1]);
+      const meshEnd=meshM?(full.search(/\b(?:Yes|No)\b/i)+meshM[1].length):0;
+      glass=cleanLine(full.substring(meshEnd,allM[0].index));
+    }
+
+    // Confidence: how many fields we found
+    const conf=_sumConf({designRef,pm,width,height,rate,amount,glass});
+
+    return{slNo,designRef,designName:designRef,profileMaterial:pm,
+           width:normDim(width),height:normDim(height),qty,mesh,glass,
+           rate,amount,_conf:conf,_src:'sum'};
+  }catch(e){
+    console.warn('_buildSumRow failed for slNo',slNo,e);
+    return null;
+  }
+}
+
+function _sumConf(f){
+  let s=0;
+  if(f.designRef&&f.designRef.length>2)s+=20;
+  if(f.pm)s+=15;
+  if(f.width>0)s+=15;
+  if(f.height>0)s+=15;
+  if(f.rate>0)s+=20;
+  if(f.glass&&f.glass.length>3)s+=15;
+  return Math.min(s,100);
+}
+
+/* ═══════════════════════════════
+   PARSER — DETAIL SECTIONS (Pages 4+)
+═══════════════════════════════ */
+function parseDetailItems(lines){
+  const items=[];
+  let cur=null,infillBuf='',infillOn=false;
+  let curPage=1;
+  const pageItemCount={};
+
+  const flushItem=()=>{
+    if(!cur)return;
+    if(infillOn&&infillBuf.trim())cur.infill=infillBuf.trim();
+    // compute confidence
+    cur._conf=_detConf(cur);
+    cur._src='det';
+    items.push(cur);
+    cur=null;infillBuf='';infillOn=false;
+  };
+
+  for(let i=0;i<lines.length;i++){
+    const t=lines[i];
+    if(!t)continue;
+
+    // Page marker
+    const pgM=t.match(/^\[PAGE:(\d+)\]$/);
+    if(pgM){curPage=parseInt(pgM[1]);continue;}
+
+    // Stop at T&C
+    if(/^(?:terms and conditions|cancellation policy|delivery terms|payment terms|warranty|bank details|force majeure|exclusions)/i.test(t)){flushItem();break;}
+
+    // Skip noise lines
+    if(_isNoise(t))continue;
+
+    // ── New item: "N. DESIGN NAME [optional: qty rate amt]"
+    const itemM=t.match(/^(\d{1,3})\.\s+([A-Z0-9][A-Z0-9\s&\/\-\+3T]+?)(?:\s+(\d{1,2})\s+([\d,]+)\s+([\d,]+))?\s*$/);
+    if(itemM&&itemM[2].trim().length>1&&/[A-Z]/.test(itemM[2])){
+      flushItem();
+      const pos=pageItemCount[curPage]||0;
+      pageItemCount[curPage]=pos+1;
+      cur={slNo:parseInt(itemM[1]),designName:itemM[2].trim(),_pageNo:curPage,_pagePos:pos};
+      if(itemM[3]){
+        cur.qty=parseInt(itemM[3]);
+        cur.rate=normMoney(itemM[4]);
+        cur.amount=normMoney(itemM[5]);
+      }
+      continue;
+    }
+    if(!cur)continue;
+
+    // ── Size line: "Size : W = 750.00; H = 1500.00"
+    const szM=t.match(/Size\s*:\s*W\s*[=:]?\s*(\d+\.?\d*)\s*[;,]?\s*H\s*[=:]?\s*(\d+\.?\d*)/i)
+            ||t.match(/W\s*=\s*(\d+\.?\d*).*?H\s*=\s*(\d+\.?\d*)/i);
+    if(szM&&!cur.width){cur.width=normDim(szM[1]);cur.height=normDim(szM[2]);continue;}
+
+    // ── Area + Weight: "Area : 12.11 Sqft. Weight: 45.854 Kg"
+    const awM=t.match(/Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft\.?\s+Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
+    if(awM){
+      cur.areaSqft=parseFloat(awM[1]);
+      cur.area=+(parseFloat(awM[1])*0.0929).toFixed(3);
+      cur.weight=parseFloat(awM[2]);continue;
+    }
+    // area only
+    const arM=t.match(/^Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft/i);
+    if(arM&&!cur.area){cur.areaSqft=parseFloat(arM[1]);cur.area=+(parseFloat(arM[1])*0.0929).toFixed(3);continue;}
+    // weight only
+    const wtM=t.match(/^Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
+    if(wtM&&!cur.weight){cur.weight=parseFloat(wtM[1]);continue;}
+
+    // ── Series line (not a kv pair)
+    if(!cur.series&&_isSeriesLine(t)){cur.series=t;continue;}
+
+    // ── Qty Rate Amount: "1 39,748 39,748"
+    if(cur.qty==null){
+      const qraM=t.match(/^(\d{1,2})\s+([\d,]+)\s+([\d,]+)\s*$/);
+      if(qraM){
+        cur.qty=parseInt(qraM[1]);
+        cur.rate=normMoney(qraM[2]);
+        cur.amount=normMoney(qraM[3]);
+        continue;
+      }
+    }
+
+    // ── Infill continuation
+    if(infillOn){
+      // If next key:value starts, stop collecting infill
+      if(/^[A-Za-z][A-Za-z\s\/]{1,35}\s*:/.test(t)&&!/^\s*\(/.test(t)){
+        cur.infill=infillBuf.trim();infillOn=false;infillBuf='';
+        // fall through to parse as kv below
+      }else{infillBuf+=' '+t;continue;}
+    }
+
+    // ── Key : Value
+    const kv=t.match(/^([^:]{1,50}?)\s*:\s*(.+)$/);
+    if(kv){
+      const k=kv[1].trim(),v=kv[2].trim();
+      _applyKV(cur,k,v,()=>{infillBuf=v;infillOn=true;});
+    }
+  }
+  flushItem();
+  return items;
+}
+
+function _isNoise(t){
+  return /^view from inside$|^\d+\s+of\s+\d+$|^aisgs-|^opportunity no\b|^responsible$|^salesperson$|^quote no\b|^quote date$/i.test(t)
+      ||/^sl\.?\s*no\s+sales|^sales\s+line\s+details$|^amount\s*\(\s*inr|^rate\s*\(\s*inr|^qty$/i.test(t);
+}
+
+function _isSeriesLine(t){
+  return /^(?:AIS|REGAL|ALN)\s+.+(?:SERIES|FOLD)\s*$/i.test(t)
+      ||/^AIS\s+(?:ECO|ECOPRIME|REGAL|INVENTA)/i.test(t)
+      ||/^REGAL\s+(?:SELECT|NEO)/i.test(t)
+      ||/^ALN\s*[-–]\s*\d+/i.test(t);
+}
+
+function _applyKV(cur,k,v,startInfill){
+  const kl=k.toLowerCase();
+  if(/^infill$/i.test(k)){startInfill();}
+  else if(/^design name$/i.test(k))cur.designName=v;
+  else if(/^design ref$/i.test(k))cur.designRef=v;
+  else if(/^series$/i.test(k))cur.series=v;
+  else if(/^profile type$/i.test(k))cur.profileType=v;
+  else if(/^profile colou?r$/i.test(k))cur.profileColor=v;
+  else if(/^glass type$/i.test(k))cur.glassType=v;
+  else if(/^infill\s*([1-4])$/i.test(k)){const n=k.match(/\d/)[0];cur['infill'+n]=v;}
+  else if(/^meshtype$|^mesh\s+type$/i.test(k))cur.meshType=v;
+  else if(/^handle type$/i.test(k))cur.handleType=_cleanHandle(v);
+  else if(/^flymesh handle$/i.test(k))cur.flymeshHandle=v;
+  else if(/^handle colou?r$/i.test(k))cur.handleColor=v;
+  else if(/^locking type$/i.test(k))cur.lockingType=v;
+  else if(/^b\/s locking type$/i.test(k))cur.bsLockType=v;
+  else if(/^fittings supplier$/i.test(k))cur.fittingsSupplier=v;
+  else if(/^qty$|^quantity$/i.test(k))cur.qty=parseInt(v)||1;
+  else if(/rate.*inr|^rate$/i.test(k)&&!/amount/i.test(k))cur.rate=normMoney(v);
+  else if(/amount.*inr|^amount$/i.test(k))cur.amount=normMoney(v);
+  else if(/^area$/i.test(k))cur.area=parseFloat(v)||0;
+  else if(/^weight$/i.test(k))cur.weight=parseFloat(v)||0;
+  else if(/^remarks?$/i.test(k))cur.remarks=v;
+  else if(/^width$/i.test(k))cur.width=normDim(v);
+  else if(/^height$/i.test(k))cur.height=normDim(v);
+  else if(/^seal type$/i.test(k))cur.sealType=v;
+  // intentionally skipped: silicon, outer frame, track, hinge, cylinder, mullion,
+  // coupler, friction stay, handle height, casement/sliding sash, RI fields
+}
+
+function _cleanHandle(v){
+  // Remove S1-, S2- prefixes: "S1-Window Handle, S2-D Handle" → "Window Handle, D Handle"
+  return v.replace(/\bS\d+[-–]/g,'').replace(/,\s*S\d+[-–]/g,', ').trim();
+}
+
+function _detConf(cur){
+  let s=0;
+  if(cur.designName&&cur.designName.length>2)s+=20;
+  if(cur.profileType)s+=10;
+  if(cur.width>0)s+=15;
+  if(cur.height>0)s+=15;
+  if(cur.infill||cur.infill1)s+=15;
+  if(cur.rate>0)s+=15;
+  if(cur.meshType)s+=10;
+  return Math.min(s,100);
+}
+
+/* ═══════════════════════════════
+   MERGE
+   Detail = primary source of truth for specs.
+   Summary = primary for financials + fallback dimensions.
+═══════════════════════════════ */
+function mergeAll(sumRows,detItems){
+  // Build indexed maps
+  const sumByNo=new Map(sumRows.map(r=>[r.slNo,r]));
+  const detByNo=new Map(detItems.map(r=>[r.slNo,r]));
+
+  // Try name-based fallback merge when slNo doesn't match
+  if(sumRows.length&&detItems.length){
+    for(const d of detItems){
+      if(!sumByNo.has(d.slNo)){
+        const match=sumRows.find(s=>_nameMatch(s.designRef,d.designName));
+        if(match&&!detByNo.has(match.slNo)){
+          sumByNo.set(d.slNo,match);
+        }
+      }
+    }
+  }
+
+  const allNos=new Set([...sumByNo.keys(),...detByNo.keys()]);
+  const result=[];
+
+  for(const n of [...allNos].sort((a,b)=>a-b)){
+    const s=sumByNo.get(n)||{};
+    const d=detByNo.get(n)||{};
+
+    // Glass: prefer detail infill (most complete), fall back to summary glass
+    const glass=_bestGlass(d,s);
+    const mesh=s.mesh||normMesh(d.meshType)||'No';
+
+    const item={
+      slNo:n,
+      designName:d.designName||s.designName||s.designRef||'',
+      designRef:d.designRef||s.designRef||d.designName||'',
+      windowType:'',// set by finalizeItem
+      series:d.series||'',
+      profileType:d.profileType||'',
+      profileColor:d.profileColor||'',
+      profileMaterial:d.profileMaterial||s.profileMaterial||normMaterial(d.profileType)||'',
+      width:d.width||s.width||0,
+      height:d.height||s.height||0,
+      area:d.area||0,
+      areaSqft:d.areaSqft||s.areaSqft||0,
+      weight:d.weight||0,
+      glass,
+      infill:d.infill||'',
+      infill1:d.infill1||'',
+      infill2:d.infill2||'',
+      infill3:d.infill3||'',
+      infill4:d.infill4||'',
+      glassType:d.glassType||'',
+      mesh,
+      meshType:d.meshType||'',
+      handleType:d.handleType||'',
+      flymeshHandle:d.flymeshHandle||'',
+      handleColor:d.handleColor||'',
+      lockingType:d.lockingType||'',
+      bsLockType:d.bsLockType||'',
+      fittingsSupplier:d.fittingsSupplier||'',
+      sealType:d.sealType||'',
+      qty:d.qty||s.qty||1,
+      rate:d.rate||s.rate||0,
+      amount:d.amount||s.amount||0,
+      remarks:d.remarks||'',
+      _pageNo:d._pageNo||null,
+      _pagePos:d._pagePos||0,
+      _conf:Math.round(((d._conf||0)+(s._conf||0))/2)||50,
+      _src:(d._src&&s._src)?'both':(d._src||s._src||'?'),
+    };
+    result.push(item);
+  }
+  return result;
+}
+
+function _nameMatch(ref,name){
+  if(!ref||!name)return false;
+  const a=ref.toLowerCase().replace(/\s+/g,'');
+  const b=name.toLowerCase().replace(/\s+/g,'');
+  return a===b||a.includes(b)||b.includes(a);
+}
+
+function _bestGlass(d,s){
+  // Collect all infill lines from detail
+  const parts=[d.infill,d.infill1,d.infill2,d.infill3,d.infill4].filter(Boolean);
+  if(parts.length)return parts.join(' + ');
+  if(d.glassType)return d.glassType;
+  if(s.glass&&s.glass.length>3)return s.glass;
+  return'';
+}
+
+/* ═══════════════════════════════
+   NORMALIZATION — FINALIZE
+═══════════════════════════════ */
+function inferType(name){
+  const n=(name||'').toLowerCase();
+  if(/tilt.{0,6}turn/.test(n))return'Tilt & Turn';
+  if(/slide.{0,6}fold|s\s*and\s*f\b|s\s*&\s*f\b/.test(n))return'Slide & Fold';
+  if(/aln\s*\d+|regal.?neo/.test(n))return'Sliding Door';
+  if(/slider.{0,4}door|sliding.{0,4}door/.test(n))return'Sliding Door';
+  if(/3t3s|twin.?sash.{0,6}slider|slider.{0,4}window|sliding.{0,4}window/.test(n))return'Sliding';
+  if(/twin.?sash/.test(n))return'Twin Sash';
+  if(/casement.{0,10}french.{0,10}door|french.{0,6}door/.test(n))return'Casement Door';
+  if(/casement.{0,6}door/.test(n))return'Casement Door';
+  if(/french.{0,6}window|casement/.test(n))return'Casement';
+  if(/top.?hung|louver|louvre/.test(n))return'Louvre';
+  if(/bay.{0,6}window/.test(n))return'Bay Window';
+  if(/fixed.{0,6}arch|arch/.test(n))return'Arch Window';
+  if(/^cw$|curtain.?wall/.test(n))return'Curtain Wall';
+  if(/g2g|corner.{0,6}window/.test(n))return'Corner Window';
+  if(/fixed|picture|vision/.test(n))return'Fixed';
+  if(/door/.test(n))return'Door';
+  return'Window';
+}
+
+function finalizeItem(it){
+  // Glass fallback chain
+  if(!it.glass||it.glass.length<3){
+    const p=[it.infill,it.infill1,it.infill2,it.infill3,it.infill4].filter(Boolean);
+    it.glass=p.length?p.join(' + '):(it.glassType||'');
+  }
+  // Mesh
+  it.mesh=/^yes$/i.test(it.mesh)?'Yes':normMesh(it.meshType);
+  // Area from dimensions if missing
+  if((!it.area||it.area<0.001)&&it.width>0&&it.height>0)
+    it.area=+((it.width*it.height)/1e6).toFixed(3);
+  // Window type
+  if(!it.windowType)it.windowType=inferType(it.designName);
+  // Profile material from profile type if missing
+  if(!it.profileMaterial&&it.profileType)
+    it.profileMaterial=normMaterial(it.profileType);
+  it.profileMaterial=it.profileMaterial||'uPVC';
+  // Defaults
+  it.qty=Math.max(1,parseInt(it.qty)||1);
+  it.rate=it.rate||0;
+  it.amount=it.amount||(it.qty*it.rate);
+  // Final confidence
+  if(!it._conf)it._conf=50;
+}
+
+/* ═══════════════════════════════
+   SVG SCHEMATICS
+═══════════════════════════════ */
 function genSVG(item){
   const wt=(item.windowType||'').toLowerCase();
   const dn=(item.designName||'').toLowerCase();
-  const W=item.width||900, H=item.height||1200;
+  const W=item.width||900,H=item.height||1200;
   const mesh=item.mesh==='Yes';
-  const combined=wt+' '+dn;
-  if(/tilt.{0,5}turn/.test(combined)) return _svgTiltTurn(W,H);
-  if(/slide.{0,5}fold|s and f\b/.test(combined)) return _svgSlideFold(W,H);
-  if(/slider.*door|sliding.*door/.test(combined)) return _svgSlidingDoor(W,H,mesh);
-  if(/twin.?sash/.test(combined)) return _svgTwinSash(W,H,mesh);
-  if(/bay/.test(combined)) return _svgBay(W,H);
-  if(/arch/.test(combined)) return _svgArch(W,H);
-  if(/corner|g2g/.test(combined)) return _svgCorner(W,H);
-  if(/curtain.?wall|^cw$/.test(wt)) return _svgCurtainWall(W,H);
-  if(/louv|louvre|top.?hung/.test(combined)) return _svgLouvre(W,H,/top.?hung/.test(combined));
-  if(/casement.{0,8}door|french.{0,8}door/.test(combined)) return _svgCasementDoor(W,H);
-  if(/casement|french/.test(combined)) return _svgCasement(W,H,/top.?fix/.test(combined),mesh);
-  if(/slider|sliding|3t3s/.test(combined)) return _svgSliding(W,H,mesh);
-  if(/fixed/.test(combined)) return _svgFixed(W,H);
-  if(/door/.test(combined)) return _svgCasementDoor(W,H);
+  const both=wt+' '+dn;
+  if(/tilt.{0,6}turn/.test(both))return _svgTiltTurn(W,H);
+  if(/slide.{0,6}fold|s and f\b/.test(both))return _svgSlideFold(W,H);
+  if(/sliding door|slider door|aln|regal.?neo/.test(both))return _svgSlidingDoor(W,H,mesh);
+  if(/twin.?sash/.test(both))return _svgTwinSash(W,H,mesh);
+  if(/bay/.test(both))return _svgBay(W,H);
+  if(/arch/.test(both))return _svgArch(W,H);
+  if(/corner|g2g/.test(both))return _svgCorner(W,H);
+  if(/curtain.?wall|^cw$/.test(wt))return _svgCurtainWall(W,H);
+  if(/louv|louvre|top.?hung/.test(both))return _svgLouvre(W,H,/top.?hung/.test(both));
+  if(/casement.{0,10}door|french.{0,6}door/.test(both))return _svgCasementDoor(W,H);
+  if(/casement|french/.test(both))return _svgCasement(W,H,/top.?fix/.test(both),mesh);
+  if(/sliding|slider|3t3s/.test(both))return _svgSliding(W,H,mesh);
+  if(/fixed/.test(both))return _svgFixed(W,H);
+  if(/door/.test(both))return _svgCasementDoor(W,H);
   return _svgFixed(W,H);
 }
 
-function _svgBase(W,H,inner,label){
+/* SVG helper: base wrapper */
+function _svgBase(W,H,drawFn,label){
   const vW=300,vH=240;
-  const scale=Math.min(220/W,175/H);
-  const dW=Math.round(W*scale), dH=Math.round(H*scale);
-  const ox=Math.round((vW-dW)/2), oy=Math.round((vH-dH)/2+6);
-  const dims=`${W} × ${H} mm`;
+  const sc=Math.min(220/W,175/H);
+  const dW=Math.round(W*sc),dH=Math.round(H*sc);
+  const ox=Math.round((vW-dW)/2),oy=Math.round((vH-dH)/2+4);
   return `<svg viewBox="0 0 ${vW} ${vH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:200px">
-<defs><pattern id="mp" patternUnits="userSpaceOnUse" width="5" height="5"><path d="M0,5L5,0M-1,1L1,-1M4,6L6,4" stroke="rgba(31,184,110,.4)" stroke-width=".7"/></pattern></defs>
-<style>.sf{stroke:var(--accent,#3d6af5);fill:var(--accent-dim,rgba(61,106,245,.10));stroke-width:2}.ss{stroke:var(--border-hi,#2e3158);fill:none;stroke-width:1}.sg{fill:var(--accent-dim,rgba(61,106,245,.08));stroke:none}.so{stroke:var(--ok,#1fb86e);stroke-width:1;stroke-dasharray:4,2;fill:none}.sh{fill:var(--t1,#e8eaf0)}.sm{fill:rgba(31,184,110,.15)}.sl{fill:var(--t2,#8a90b0);font:10px 'Inter',sans-serif}.sa{fill:var(--accent,#3d6af5);font:bold 9px 'Inter',sans-serif}</style>
-${inner(ox,oy,dW,dH)}
-<text class="sl" x="${vW/2}" y="${vH-3}" text-anchor="middle" font-size="9">${dims} · Inside View</text>
-${label?`<text class="sa" x="${vW/2}" y="13" text-anchor="middle" font-size="9">${label}</text>`:''}
+<style>.sf{stroke:var(--accent,#3d6af5);fill:rgba(61,106,245,.10);stroke-width:2}
+.ss{stroke:var(--border-hi,#2e3158);fill:none;stroke-width:1}
+.sg{fill:rgba(61,106,245,.07);stroke:none}
+.so{stroke:var(--ok,#1fb86e);stroke-width:1;stroke-dasharray:4,2;fill:none}
+.sh{fill:var(--t1,#e8eaf0)}.sm{fill:rgba(31,184,110,.15)}
+.sl{fill:var(--t2,#8a90b0);font:9px 'Inter',sans-serif}
+.sa{fill:var(--accent,#3d6af5);font:bold 9px 'Inter',sans-serif}</style>
+${drawFn(ox,oy,dW,dH)}
+<text class="sl" x="${vW/2}" y="${vH-3}" text-anchor="middle">${W}×${H}mm · Inside View</text>
+${label?`<text class="sa" x="${vW/2}" y="12" text-anchor="middle">${label}</text>`:''}
 </svg>`;
 }
 
 function _svgFixed(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>`
 <rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>
 <rect class="sg" x="${ox+5}" y="${oy+5}" width="${dW-10}" height="${dH-10}"/>
-<line class="ss" x1="${ox+12}" y1="${oy+12}" x2="${ox+dW-12}" y2="${oy+dH-12}" opacity=".25"/>
-<line class="ss" x1="${ox+dW-12}" y1="${oy+12}" x2="${ox+12}" y2="${oy+dH-12}" opacity=".25"/>
+<line class="ss" x1="${ox+14}" y1="${oy+14}" x2="${ox+dW-14}" y2="${oy+dH-14}" opacity=".2"/>
+<line class="ss" x1="${ox+dW-14}" y1="${oy+14}" x2="${ox+14}" y2="${oy+dH-14}" opacity=".2"/>
 `,'FIXED');}
 
 function _svgSliding(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>180?3:2; const pw=dW/p; let c='';
+const p=dW>170?3:2,pw=dW/p;let c='';
 c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
 c+=`<line class="ss" x1="${ox}" y1="${oy+5}" x2="${ox+dW}" y2="${oy+5}"/>`;
 c+=`<line class="ss" x1="${ox}" y1="${oy+dH-5}" x2="${ox+dW}" y2="${oy+dH-5}"/>`;
-for(let i=0;i<p;i++){const px=ox+i*pw,slide=i%2===1;
+for(let i=0;i<p;i++){const px=ox+i*pw,sl=i%2===1;
 c+=`<rect class="ss" x="${px+2}" y="${oy+2}" width="${pw-4}" height="${dH-4}"/>`;
-c+=`<rect class="${mesh&&slide?'sm':'sg'}" x="${px+5}" y="${oy+7}" width="${pw-10}" height="${dH-14}"/>`;
-if(slide){c+=`<circle class="sh" cx="${px+10}" cy="${oy+dH/2}" r="3"/>`;
+c+=`<rect class="${mesh&&sl?'sm':'sg'}" x="${px+5}" y="${oy+8}" width="${pw-10}" height="${dH-16}"/>`;
+if(sl){c+=`<circle class="sh" cx="${px+10}" cy="${oy+dH/2}" r="3"/>`;
 c+=`<path class="so" d="M${px+pw*0.7},${oy+dH/2}L${px+16},${oy+dH/2}"/>`;}}
 return c;},'SLIDING');}
 
 function _svgCasement(W,H,topFix,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>160?2:1; const pw=dW/p; let c='';
+const p=dW>160?2:1,pw=dW/p;let c='';
 c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-if(topFix){const th=Math.round(dH*0.28);
+if(topFix){const th=Math.round(dH*0.28),my=oy+th,mh=dH-th;
 c+=`<rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${th-4}"/>`;
 c+=`<rect class="sg" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${th-10}"/>`;
-c+=`<line class="ss" x1="${ox+10}" y1="${oy+8}" x2="${ox+dW/2-5}" y2="${oy+th-6}" opacity=".3"/>`;
-c+=`<line class="ss" x1="${ox+dW/2+5}" y1="${oy+8}" x2="${ox+dW-10}" y2="${oy+th-6}" opacity=".3"/>`;
-const my=oy+th, mh=dH-th;
+c+=`<path class="so" d="M${ox+dW/2},${oy+th-6}L${ox+dW-10},${oy+10}"/>`;
 for(let i=0;i<p;i++){const px=ox+i*pw;
 c+=`<rect class="ss" x="${px+3}" y="${my+2}" width="${pw-6}" height="${mh-4}"/>`;
 c+=`<rect class="${mesh?'sm':'sg'}" x="${px+6}" y="${my+5}" width="${pw-12}" height="${mh-10}"/>`;
@@ -454,12 +975,12 @@ function _svgTiltTurn(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>`
 <path class="so" d="M${ox+8},${oy+dH-8}L${ox+dW-8},${oy+8}"/>
 <path class="so" d="M${ox+dW/2},${oy+dH-8}L${ox+8},${oy+dH*0.42}M${ox+dW/2},${oy+dH-8}L${ox+dW-8},${oy+dH*0.42}"/>
 <rect class="sh" x="${ox+dW/2-5}" y="${oy+dH-22}" width="10" height="14" rx="1"/>
-<text class="sa" x="${ox+dW-5}" y="${oy+18}" text-anchor="end" font-size="8">T&amp;T</text>
+<text class="sa" x="${ox+dW-4}" y="${oy+18}" text-anchor="end" font-size="8">T&amp;T</text>
 `,'TILT &amp; TURN');}
 
 function _svgBay(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const pw=dW/3, ang=pw*0.14;
-return `<g stroke="var(--accent,#3d6af5)" stroke-width="2" fill="var(--accent-dim,rgba(61,106,245,.10))">
+const pw=dW/3,ang=pw*0.14;
+return`<g stroke="var(--accent,#3d6af5)" stroke-width="2" fill="rgba(61,106,245,.10)">
 <polygon points="${ox+ang},${oy} ${ox+pw},${oy} ${ox+pw},${oy+dH} ${ox},${oy+dH}"/>
 <rect x="${ox+pw}" y="${oy}" width="${pw}" height="${dH}"/>
 <polygon points="${ox+2*pw},${oy} ${ox+dW-ang},${oy} ${ox+dW},${oy+dH} ${ox+2*pw},${oy+dH}"/>
@@ -473,29 +994,27 @@ return `<g stroke="var(--accent,#3d6af5)" stroke-width="2" fill="var(--accent-di
 },'BAY WINDOW');}
 
 function _svgArch(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const ah=Math.round(dH*0.28), cx=ox+dW/2;
-return `<path class="sf" d="M${ox},${oy+ah} Q${ox},${oy} ${cx},${oy} Q${ox+dW},${oy} ${ox+dW},${oy+ah} L${ox+dW},${oy+dH} L${ox},${oy+dH} Z"/>
+const ah=Math.round(dH*0.28),cx=ox+dW/2;
+return`<path class="sf" d="M${ox},${oy+ah} Q${ox},${oy} ${cx},${oy} Q${ox+dW},${oy} ${ox+dW},${oy+ah} L${ox+dW},${oy+dH} L${ox},${oy+dH} Z"/>
 <path class="sg" d="M${ox+4},${oy+ah} Q${ox+4},${oy+4} ${cx},${oy+4} Q${ox+dW-4},${oy+4} ${ox+dW-4},${oy+ah} L${ox+dW-4},${oy+dH-4} L${ox+4},${oy+dH-4} Z"/>
-<path class="so" d="M${ox+12},${oy+ah+10}L${ox+dW/2-4},${oy+8}M${ox+dW/2+4},${oy+8}L${ox+dW-12},${oy+ah+10}" opacity=".5"/>
-<circle class="sh" cx="${ox+dW/2}" cy="${oy+dH/2+10}" r="3"/>
-<path class="so" d="M${ox+12},${oy+dH-10}L${ox+dW-12},${oy+ah+20}"/>`;
+<circle class="sh" cx="${cx}" cy="${oy+dH*0.55}" r="3"/>
+<path class="so" d="M${ox+10},${oy+dH-10}L${cx-4},${oy+ah+8}M${cx+4},${oy+ah+8}L${ox+dW-10},${oy+dH-10}"/>`;
 },'ARCH');}
 
 function _svgSlidingDoor(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>180?3:2; const pw=dW/p; let c='';
+const p=dW>180?3:2,pw=dW/p;let c='';
 c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
 c+=`<line class="ss" x1="${ox}" y1="${oy+5}" x2="${ox+dW}" y2="${oy+5}"/>`;
-c+=`<line class="ss" x1="${ox}" y1="${oy+dH-5}" x2="${ox+dW}" y2="${oy+dH-5}"/>`;
 c+=`<rect x="${ox}" y="${oy+dH-5}" width="${dW}" height="5" style="fill:var(--accent,#3d6af5);opacity:.4"/>`;
-for(let i=0;i<p;i++){const px=ox+i*pw,slide=i===1;
+for(let i=0;i<p;i++){const px=ox+i*pw,sl=i===1;
 c+=`<rect class="ss" x="${px+2}" y="${oy+2}" width="${pw-4}" height="${dH-4}"/>`;
-c+=`<rect class="${mesh&&slide?'sm':'sg'}" x="${px+5}" y="${oy+7}" width="${pw-10}" height="${dH-14}"/>`;
-if(slide){c+=`<rect class="sh" x="${px+8}" y="${oy+dH*0.42}" width="7" height="16" rx="2"/>`;
+c+=`<rect class="${mesh&&sl?'sm':'sg'}" x="${px+5}" y="${oy+8}" width="${pw-10}" height="${dH-16}"/>`;
+if(sl){c+=`<rect class="sh" x="${px+8}" y="${oy+dH*0.42}" width="7" height="16" rx="2"/>`;
 c+=`<path class="so" d="M${px+pw*0.7},${oy+dH*0.5}L${px+18},${oy+dH*0.5}"/>`;}}
 return c;},'SLIDING DOOR');}
 
 function _svgCasementDoor(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>140?2:1; const pw=dW/p; let c='';
+const p=dW>140?2:1,pw=dW/p;let c='';
 c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
 c+=`<rect x="${ox}" y="${oy+dH-5}" width="${dW}" height="5" style="fill:var(--accent,#3d6af5);opacity:.5"/>`;
 for(let i=0;i<p;i++){const px=ox+i*pw,ol=i===0;
@@ -503,12 +1022,12 @@ c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-8}"/>`
 c+=`<rect class="sg" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-16}"/>`;
 c+=`<path class="so" d="M${ol?px+8:px+pw-8},${oy+dH-12}L${ol?px+pw-8:px+8},${oy+8}"/>`;
 c+=`<rect class="sh" x="${ol?px+pw-14:px+7}" y="${oy+dH*0.44}" width="7" height="18" rx="2"/>`;
-c+=`<circle class="sh" cx="${ol?px+pw-14:px+7+3}" cy="${oy+dH*0.44+18}" r="2"/>`;}
+c+=`<circle class="sh" cx="${ol?px+pw-14+3:px+7+3}" cy="${oy+dH*0.44+18}" r="2"/>`;}
 return c;},'CASEMENT DOOR');}
 
 function _svgTwinSash(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
 const hh=dH/2;
-return `<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>
+return`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>
 <rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${hh-4}"/>
 <rect class="${mesh?'sm':'sg'}" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${hh-10}"/>
 <path class="so" d="M${ox+10},${oy+hh-8}L${ox+dW-10},${oy+10}"/>
@@ -516,313 +1035,66 @@ return `<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"
 <rect class="ss" x="${ox+3}" y="${oy+hh+2}" width="${dW-6}" height="${hh-4}"/>
 <rect class="${mesh?'sm':'sg'}" x="${ox+6}" y="${oy+hh+5}" width="${dW-12}" height="${hh-10}"/>
 <path class="so" d="M${ox+10},${oy+hh+8}L${ox+dW-10},${oy+dH-10}"/>
-<circle class="sh" cx="${ox+dW-12}" cy="${oy+hh+hh/2}" r="3"/>`;
+<circle class="sh" cx="${ox+dW-12}" cy="${oy+hh*1.5}" r="3"/>`;
 },'TWIN SASH');}
 
 function _svgSlideFold(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=4; const pw=dW/p; let c='';
+const p=4,pw=dW/p;let c='';
 c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
 for(let i=0;i<p;i++){const px=ox+i*pw;
 c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-6}"/>`;
 c+=`<rect class="sg" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-12}"/>`;
 if(i<p-1)c+=`<path class="so" d="M${px+pw-3},${oy+12}L${px+pw+3},${oy+12}M${px+pw-3},${oy+dH-12}L${px+pw+3},${oy+dH-12}"/>`;
-if(i%2===0)c+=`<rect class="sh" x="${px+pw-10}" y="${oy+dH/2-5}" width="6" height="12" rx="1"/>`;}
-c+=`<path class="so" d="M${ox+pw*1.5},${oy+dH*0.5}L${ox+pw*2.5},${oy+dH*0.5}" stroke-dasharray="2,1"/>`;
+if(i%2===0)c+=`<rect class="sh" x="${px+pw-10}" y="${oy+dH/2-6}" width="6" height="12" rx="1"/>`;}
 return c;},'SLIDE &amp; FOLD');}
 
 function _svgLouvre(W,H,topHung){return _svgBase(W,H,(ox,oy,dW,dH)=>{
 let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-if(topHung){const th=Math.round(dH*0.3);
+if(topHung){const th=Math.round(dH*0.3),lh=dH-th,sl=5,sh=lh/sl;
 c+=`<rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${th-4}"/>`;
 c+=`<rect class="sg" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${th-10}"/>`;
 c+=`<path class="so" d="M${ox+dW/2},${oy+th-6}L${ox+dW-10},${oy+10}"/>`;
-const lh=dH-th; const sl=5; const sh=lh/sl;
-for(let i=0;i<sl;i++){const sy=oy+th+i*sh+sh*0.1;
-c+=`<rect class="sg" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.72}" rx="1"/>`;
-c+=`<rect class="ss" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.72}" rx="1"/>`;}}
-else{const sl=6; const sh=dH/sl;
+for(let i=0;i<sl;i++){const sy=oy+th+i*sh+sh*0.08;
+c+=`<rect class="sg" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.75}" rx="1"/>`;
+c+=`<rect class="ss" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.75}" rx="1"/>`;}}
+else{const sl=6,sh=dH/sl;
 for(let i=0;i<sl;i++){const sy=oy+i*sh+sh*0.08;
 c+=`<rect class="sg" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.76}" rx="1"/>`;
 c+=`<rect class="ss" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.76}" rx="1"/>`;}}
 return c;},'LOUVRE');}
 
 function _svgCorner(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const hw=Math.round(dW*0.55), vw=dW-hw;
-return `<rect class="sf" x="${ox}" y="${oy}" width="${hw}" height="${dH}" rx="2"/>
+const hw=Math.round(dW*0.55),vw=dW-hw;
+return`<rect class="sf" x="${ox}" y="${oy}" width="${hw}" height="${dH}" rx="2"/>
 <rect class="sg" x="${ox+4}" y="${oy+4}" width="${hw-8}" height="${dH-8}"/>
 <rect class="sf" x="${ox+hw}" y="${oy}" width="${vw}" height="${dH}" rx="2"/>
 <rect class="sg" x="${ox+hw+4}" y="${oy+4}" width="${vw-8}" height="${dH-8}"/>
 <circle cx="${ox+hw}" cy="${oy+dH/2}" r="5" style="fill:var(--ok,#1fb86e);opacity:.8"/>
-<text style="fill:var(--ok,#1fb86e);font:bold 8px 'Inter',sans-serif" x="${ox+hw}" y="${oy+dH/2+16}" text-anchor="middle">G2G</text>`;
+<text style="fill:var(--ok,#1fb86e);font:bold 8px 'Inter',sans-serif" x="${ox+hw}" y="${oy+dH/2+15}" text-anchor="middle">G2G</text>`;
 },'CORNER G2G');}
 
 function _svgCurtainWall(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const cols=2,rows=3,pw=dW/cols,ph=dH/rows; let c='';
+const cols=2,rows=3,pw=dW/cols,ph=dH/rows;let c='';
 c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
 for(let r=0;r<rows;r++)for(let cl=0;cl<cols;cl++){
 c+=`<rect class="sg" x="${ox+cl*pw+4}" y="${oy+r*ph+4}" width="${pw-8}" height="${ph-8}" rx="1"/>`;
 c+=`<rect class="ss" x="${ox+cl*pw+4}" y="${oy+r*ph+4}" width="${pw-8}" height="${ph-8}" rx="1"/>`;}
 return c;},'CURTAIN WALL');}
 
-/* ═══════════════════════════════════════════
-   BENEFITS ENGINE
-═══════════════════════════════════════════ */
-function benefits(item){
-  const res=[];
-  const g=[item.glass,item.infill,item.infill1,item.infill2,item.infill3].filter(Boolean).join(' ').toLowerCase();
-  const ty=[item.designName,item.windowType].filter(Boolean).join(' ').toLowerCase();
-  const pt=(item.profileType||'').toLowerCase();
-  const lk=(item.lockingType||'').toLowerCase();
-  if(/stronglas|toughened|tempered|\bctg\b|\btg\b/.test(g)) res.push({ic:'🛡',t:'AIS Stronglas – safety-grade toughened glass'});
-  if(/\bdgu\b|lam\b/.test(g)) res.push({ic:'🌡',t:'Double glazing – improved thermal insulation'});
-  if(/acoustic.*pvb|pvb.*acoustic|acoustic/.test(g)) res.push({ic:'🔇',t:'Acoustic PVB laminate – superior noise reduction'});
-  if(/argon/.test(g)) res.push({ic:'⚡',t:'Argon gas fill – maximises energy efficiency'});
-  if(/eco sense|enhance spring|solar control/.test(g)) res.push({ic:'☀️',t:'Eco Sense solar control glass – reduces heat gain'});
-  if(/milky pvb|milky|frosted/.test(g)) res.push({ic:'🫧',t:'Privacy glass – prevents direct visual entry'});
-  if(/tinted|bronze tinted|dark grey tinted/.test(g)) res.push({ic:'🕶',t:'Tinted glass – reduces glare & heat gain'});
-  if(/georgian bar/.test(g)) res.push({ic:'🏛',t:'Georgian bar – elegant colonial grid aesthetics'});
-  if(item.mesh==='Yes') res.push({ic:'🦟',t:'Insect mesh – protection from mosquitoes & flies'});
-  if(/multi.?point|mvd|cremone/.test(lk)) res.push({ic:'🔐',t:'Multi-point locking – premium security'});
-  if(/tilt.{0,5}turn/.test(ty)) res.push({ic:'💨',t:'Tilt & turn – tilt for ventilation, turn for cleaning'});
-  if(/casement/.test(ty)&&!/door/.test(ty)) res.push({ic:'🌬',t:'Casement – excellent weather seal & ventilation'});
-  if(/twin.?sash/.test(ty)) res.push({ic:'💨',t:'Twin sash – simultaneous top & bottom ventilation'});
-  if(/sliding/.test(ty)&&!/door/.test(ty)) res.push({ic:'📐',t:'Sliding – space-efficient, no swing clearance'});
-  if(/sliding door|slider door/.test(ty)) res.push({ic:'🚪',t:'Sliding door – seamless indoor-outdoor connection'});
-  if(/slide.{0,5}fold|s and f/.test(ty)) res.push({ic:'🚪',t:'Slide & fold – full wall opening, maximum light'});
-  if(/bay/.test(ty)) res.push({ic:'✨',t:'Bay window – panoramic views & premium aesthetics'});
-  if(/corner|g2g/.test(ty)) res.push({ic:'🏗',t:'Glass-to-glass corner – unobstructed panoramic view'});
-  if(/arch/.test(ty)) res.push({ic:'🏛',t:'Arch window – premium architectural statement piece'});
-  if(/curtain.?wall|^cw$/.test(ty)) res.push({ic:'🏢',t:'Curtain wall – maximum glazing facade solution'});
-  if(/louv|louvre/.test(ty)) res.push({ic:'🌀',t:'Louvre – directional ventilation & light control'});
-  if(/upvc|pvc/.test(pt)) res.push({ic:'🔧',t:'uPVC – termite-proof, low maintenance, weather resistant'});
-  if(/alumin/.test(pt)) res.push({ic:'💪',t:'Aluminium – high strength, slim sight lines, powder coated'});
-  const ar=parseFloat(item.area)||0;
-  if(ar>3) res.push({ic:'🌅',t:'Large glazing area – maximises natural light & panoramic views'});
-  return res;
-}
-
-/* ═══════════════════════════════════════════
-   SPEECH
-═══════════════════════════════════════════ */
-function buildSpeech(item){
-  const bens=benefits(item).map(b=>b.t).join('; ');
-  const pm=item.profileMaterial||'uPVC';
-  const ty=item.windowType||'window';
-  const wh=item.width&&item.height?`width ${item.width} millimetres and height ${item.height} millimetres, `:'';
-  const ar=item.area?`area ${item.area} square metres, `:'';
-  const gl=item.glass?`The glass is ${item.glass}. `:'';
-  const ms=item.mesh==='Yes'?'Insect mesh is included. ':'';
-  const lk=item.lockingType&&item.lockingType!=='N/A'?`It has ${item.lockingType}. `:'';
-  return `Item ${item.slNo}. This is ${/^[aeiou]/i.test(pm)?'an':'a'} ${pm} ${ty}, ${wh}${ar}${item.series?'series '+item.series+'. ':''}${gl}${ms}${lk}${bens?'Key benefits: '+bens+'.':''}`.replace(/\s+/g,' ').trim();
-}
-function speakItem(item,btn){
-  if(!('speechSynthesis' in window)){toast('Speech not supported','err');return;}
-  if(S.speaking){speechSynthesis.cancel();S.speaking=false;document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));if(S.speakBtn===btn)return;}
-  const utt=new SpeechSynthesisUtterance(buildSpeech(item));
-  utt.rate=0.95;utt.pitch=1;
-  utt.onend=utt.onerror=()=>{S.speaking=false;S.speakBtn=null;document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));};
-  S.speaking=true;S.speakBtn=btn;if(btn)btn.classList.add('on');
-  speechSynthesis.speak(utt);
-}
-function speakCurrent(){if(S.current)speakItem(S.current,g('mSpeakBtn'));}
-
-/* ═══════════════════════════════════════════
-   PDF EXTRACTION  (stores pdfDoc + page tracking)
-═══════════════════════════════════════════ */
-async function extractPDF(file){
-  if(typeof pdfjsLib==='undefined') throw new Error('PDF.js not loaded. Check your internet connection.');
-  const buf=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-  S.pdfDoc=pdf;
-  let full='';
-  for(let p=1;p<=pdf.numPages;p++){
-    const page=await pdf.getPage(p);
-    const content=await page.getTextContent();
-    const its=content.items.slice().sort((a,b)=>{
-      const dy=Math.round(b.transform[5]/4)-Math.round(a.transform[5]/4);
-      return dy!==0?dy:a.transform[4]-b.transform[4];
-    });
-    const lines=[];let lY=null,lT='';
-    for(const it of its){
-      const y=Math.round(it.transform[5]/4);
-      if(lY!==null&&Math.abs(y-lY)>1){if(lT.trim())lines.push(lT.trim());lT='';}
-      lT+=(it.str||'')+' ';lY=y;
-    }
-    if(lT.trim())lines.push(lT.trim());
-    full+=lines.join('\n')+`\n[PAGE:${p}]\n`;
-  }
-  return full;
-}
-
-/* ═══════════════════════════════════════════
-   PARSER
-═══════════════════════════════════════════ */
-function parseQuotation(rawText){
-  const lines=rawText.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
-  const sumRows=parseSummaryRows(lines);
-  const detItems=parseDetailItems(lines);
-  const merged=mergeAll(sumRows,detItems);
-  merged.forEach(finalizeItem);
-  return merged.filter(i=>i.designName||(i.width&&i.height));
-}
-
-function parseSummaryRows(lines){
-  const rows=[];let active=false,buf=[],slNo=0;
-  const flush=()=>{
-    if(buf.length&&slNo>0){const r=_extractSumRow(buf.join(' ').replace(/\s+/g,' ').trim(),slNo);if(r)rows.push(r);}
-    buf=[];slNo=0;
-  };
-  for(const ln of lines){
-    const t=ln.trim();
-    if(/price and quantity summary/i.test(t)){active=true;continue;}
-    if(!active)continue;
-    if(/^(?:sales line details|total qty|total area|basic value|grand total)/i.test(t)){flush();break;}
-    if(/^(?:sl\.?\s*$|no\.?\s*$|design ref$|product$|location$|width$|height$|qty$|mesh$|glass$|rate\s*\(|amount\s*\()/i.test(t))continue;
-    const rs=t.match(/^(\d{1,2})\s+[A-Z3]/);
-    if(rs&&parseInt(rs[1])>=1&&parseInt(rs[1])<=99){flush();slNo=parseInt(rs[1]);buf=[t];}
-    else if(buf.length>0)buf.push(t);
-  }
-  flush();return rows;
-}
-
-function _extractSumRow(full,slNo){
-  const pmM=full.match(/\b(uPVC|Aluminium)\b/i);
-  const pm=pmM?(/alumin/i.test(pmM[1])?'Aluminium':'uPVC'):'';
-  let designRef='';
-  if(pmM){const raw=full.substring(String(slNo).length+1,full.indexOf(pmM[0])).trim();const m=raw.match(/^([A-Z0-9][A-Z0-9\s&\-\/3T]+)/);designRef=m?m[1].trim():raw.trim();}
-  const afterPM=pmM?full.substring(full.indexOf(pmM[0])+pmM[0].length).trim():full;
-  const meshM=afterPM.match(/\b(Yes|No)\b/i);
-  const mesh=meshM?(meshM[1][0].toUpperCase()+meshM[1].slice(1).toLowerCase()):'No';
-  const preMesh=meshM?afterPM.substring(0,afterPM.search(/\b(?:Yes|No)\b/i)):afterPM;
-  const wh=(preMesh.match(/\b(\d{3,4})\b/g)||[]).map(Number).filter(n=>n>=200&&n<=9999);
-  const qM=preMesh.match(/\b(\d{1,2})\b/);const qty=qM?parseInt(qM[1]):1;
-  const moneyRe=/\b(\d{1,3}(?:,\d{2,3})+)\b/g;
-  const allM=[...full.matchAll(moneyRe)];
-  let rate=0,amount=0,g1='',g2='';
-  if(allM.length>=2){
-    const rM=allM[allM.length-2],aM=allM[allM.length-1];
-    rate=parseFloat(rM[1].replace(/,/g,''));amount=parseFloat(aM[1].replace(/,/g,''));
-    const mEnd=full.search(/\b(?:Yes|No)\b/i)+(meshM?meshM[1].length:2);
-    g1=full.substring(mEnd,rM.index).trim();g2=full.substring(aM.index+aM[0].length).trim();
-  }else if(allM.length===1){rate=amount=parseFloat(allM[0][1].replace(/,/g,''));const mEnd=full.search(/\b(?:Yes|No)\b/i)+(meshM?meshM[1].length:2);g1=full.substring(mEnd,allM[0].index).trim();}
-  const glass=(g1+' '+g2).replace(/\s+/g,' ').trim();
-  return{slNo,designRef,designName:designRef,profileMaterial:pm,width:wh[0]||0,height:wh[1]||0,qty,mesh,glass,rate,amount};
-}
-
-function parseDetailItems(lines){
-  const items=[];let cur=null,infillBuf='',infillOn=false;
-  let curPage=1;const pageItems={};
-  const flushItem=()=>{if(!cur)return;if(infillOn&&infillBuf.trim())cur.infill=infillBuf.trim();items.push(cur);cur=null;infillBuf='';infillOn=false;};
-  for(let i=0;i<lines.length;i++){
-    const t=lines[i].trim();if(!t)continue;
-    const pgM=t.match(/^\[PAGE:(\d+)\]$/);if(pgM){curPage=parseInt(pgM[1]);continue;}
-    if(/^(?:terms and conditions|cancellation policy|payment terms|warranty|bank details|force majeure)/i.test(t)){flushItem();break;}
-    if(/^view from inside$|^\d+ of \d+$|^aisgs-|^opportunity no\b|^responsible$|^salesperson$/i.test(t))continue;
-    if(/^sl\.?\s*no\s+sales|^sales\s+line\s+details$|^amount\s*\(\s*inr|^rate\s*\(\s*inr|^qty$/i.test(t))continue;
-    const itemM=t.match(/^(\d{1,3})\.\s+([A-Z0-9][A-Z0-9\s&\/\-\+3T]+?)(?:\s+(\d{1,2})\s+([\d,]+)\s+([\d,]+))?\s*$/);
-    if(itemM&&/[A-Z]/.test(itemM[2])&&itemM[2].trim().length>1){
-      flushItem();
-      const pos=pageItems[curPage]||0;pageItems[curPage]=pos+1;
-      cur={slNo:parseInt(itemM[1]),designName:itemM[2].trim(),_pageNo:curPage,_pagePos:pos};
-      if(itemM[3]){cur.qty=parseInt(itemM[3]);cur.rate=parseFloat(itemM[4].replace(/,/g,''));cur.amount=parseFloat(itemM[5].replace(/,/g,''));}
-      continue;
-    }
-    if(!cur)continue;
-    const szM=t.match(/Size\s*:\s*W\s*=?\s*(\d+\.?\d*)\s*[;,]?\s*H\s*=?\s*(\d+\.?\d*)/i)||t.match(/W\s*=\s*(\d+\.?\d*).*H\s*=\s*(\d+\.?\d*)/i);
-    if(szM&&!cur.width){cur.width=parseFloat(szM[1]);cur.height=parseFloat(szM[2]);continue;}
-    const awM=t.match(/Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft\.?\s+Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
-    if(awM){cur.areaSqft=parseFloat(awM[1]);cur.area=+(parseFloat(awM[1])*0.0929).toFixed(3);cur.weight=parseFloat(awM[2]);continue;}
-    const arM=t.match(/^Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft\./i);
-    if(arM&&!cur.area){cur.areaSqft=parseFloat(arM[1]);cur.area=+(parseFloat(arM[1])*0.0929).toFixed(3);continue;}
-    const wtM=t.match(/^Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
-    if(wtM&&!cur.weight){cur.weight=parseFloat(wtM[1]);continue;}
-    if(!cur.series&&(/^(?:AIS|REGAL|ALN)\s+.+(?:SERIES|FOLD)\s*$/i.test(t)||/^AIS\s+(?:ECO|ECOPRIME|REGAL|INVENTA)/i.test(t)||/^REGAL\s+(?:SELECT|NEO)/i.test(t)||/^ALN\s*[-–]\s*\d+/i.test(t))){cur.series=t;continue;}
-    const qraM=t.match(/^(\d{1,2})\s+([\d,]+)\s+([\d,]+)\s*$/);
-    if(qraM&&cur.qty==null){cur.qty=parseInt(qraM[1]);cur.rate=parseFloat(qraM[2].replace(/,/g,''));cur.amount=parseFloat(qraM[3].replace(/,/g,''));continue;}
-    if(infillOn){
-      if(/^[A-Za-z][A-Za-z\s\/]{1,35}\s*:/.test(t)&&!/^\s*\(/.test(t)){cur.infill=infillBuf.trim();infillOn=false;infillBuf='';}
-      else{infillBuf+=' '+t;continue;}
-    }
-    const kv=t.match(/^([^:]{1,45}?)\s*:\s*(.+)$/);
-    if(kv){
-      const k=kv[1].trim(),v=kv[2].trim();
-      if(/^infill$/i.test(k)){infillBuf=v;infillOn=true;}
-      else if(/^design name$/i.test(k))cur.designName=v;
-      else if(/^design ref$/i.test(k))cur.designRef=v;
-      else if(/^series$/i.test(k))cur.series=v;
-      else if(/^profile type$/i.test(k))cur.profileType=v;
-      else if(/^profile colou?r$/i.test(k))cur.profileColor=v;
-      else if(/^glass type$/i.test(k))cur.glassType=v;
-      else if(/^infill\s*([1-4])$/i.test(k)){const n=k.match(/\d/)[0];cur['infill'+n]=v;}
-      else if(/^meshtype$|^mesh\s+type$/i.test(k))cur.meshType=v;
-      else if(/^handle type$/i.test(k))cur.handleType=v.replace(/\bS\d+-/g,'').replace(/,\s*S\d+-/g,', ');
-      else if(/^handle colou?r$/i.test(k))cur.handleColor=v;
-      else if(/^locking type$/i.test(k))cur.lockingType=v;
-      else if(/^fittings supplier$/i.test(k))cur.fittingsSupplier=v;
-      else if(/^qty$|^quantity$/i.test(k))cur.qty=parseInt(v)||1;
-      else if(/rate.*inr|^rate$/i.test(k)&&!/amount/i.test(k))cur.rate=parseFloat(v.replace(/[,₹\s]/g,''))||0;
-      else if(/amount.*inr|^amount$/i.test(k))cur.amount=parseFloat(v.replace(/[,₹\s]/g,''))||0;
-      else if(/^area$/i.test(k))cur.area=parseFloat(v)||0;
-      else if(/^weight$/i.test(k))cur.weight=parseFloat(v)||0;
-      else if(/^remarks?$/i.test(k))cur.remarks=v;
-      else if(/^width$/i.test(k))cur.width=parseFloat(v)||0;
-      else if(/^height$/i.test(k))cur.height=parseFloat(v)||0;
-    }
-  }
-  flushItem();return items;
-}
-
-function mergeAll(sumRows,detItems){
-  const allNos=new Set([...sumRows.map(x=>x.slNo),...detItems.map(x=>x.slNo)]);
-  return [...allNos].sort((a,b)=>a-b).map(n=>{
-    const s=sumRows.find(x=>x.slNo===n)||{};
-    const d=detItems.find(x=>x.slNo===n)||{};
-    const glass=d.infill||d.infill1||s.glass||d.glassType||'';
-    const mesh=s.mesh||_meshFromType(d.meshType);
-    return{slNo:n,designName:d.designName||s.designName||s.designRef||'',designRef:d.designRef||s.designRef||d.designName||'',windowType:d.windowType||'',series:d.series||'',profileType:d.profileType||'',profileColor:d.profileColor||'',profileMaterial:d.profileMaterial||s.profileMaterial||'',width:d.width||s.width||0,height:d.height||s.height||0,area:d.area||s.area||0,areaSqft:d.areaSqft||s.areaSqft||0,weight:d.weight||0,glass,infill:d.infill||'',infill1:d.infill1||'',infill2:d.infill2||'',infill3:d.infill3||'',infill4:d.infill4||'',glassType:d.glassType||'',mesh,meshType:d.meshType||'',handleType:d.handleType||'',handleColor:d.handleColor||'',lockingType:d.lockingType||'',fittingsSupplier:d.fittingsSupplier||'',qty:d.qty||s.qty||1,rate:d.rate||s.rate||0,amount:d.amount||s.amount||0,remarks:d.remarks||'',_pageNo:d._pageNo||null,_pagePos:d._pagePos||0};
-  });
-}
-function _meshFromType(mt){if(!mt)return'No';return/^\s*no\s*$|^\s*none\s*$|^\s*n\/a\s*$/i.test(mt.trim())?'No':'Yes';}
-
-function inferType(name){
-  const n=(name||'').toLowerCase();
-  if(/tilt.{0,5}turn/.test(n))return'Tilt & Turn';
-  if(/slide.{0,5}fold|s and f\b|s\s*&\s*f\b/.test(n))return'Slide & Fold';
-  if(/aln\s*\d+|regal neo/.test(n))return'Sliding Door';
-  if(/slider.*door|sliding.*door/.test(n))return'Sliding Door';
-  if(/3t3s|slider.*window|sliding.*window/.test(n))return'Sliding';
-  if(/twin.?sash/.test(n))return'Twin Sash';
-  if(/casement.{0,10}door|french.{0,5}door/.test(n))return'Casement Door';
-  if(/french.*window|casement/.test(n))return'Casement';
-  if(/top.?hung|louver|louvre/.test(n))return'Louvre';
-  if(/bay.*window/.test(n))return'Bay Window';
-  if(/fixed.*arch|arch/.test(n))return'Arch Window';
-  if(/^cw$|curtain.?wall/.test(n))return'Curtain Wall';
-  if(/g2g|corner/.test(n))return'Corner Window';
-  if(/fixed|picture/.test(n))return'Fixed';
-  if(/door/.test(n))return'Door';
-  return'Window';
-}
-
-function finalizeItem(it){
-  if(!it.glass||it.glass.length<3){const p=[it.infill,it.infill1,it.infill2,it.infill3,it.infill4].filter(Boolean);it.glass=p.length?p.join(' + '):(it.glassType||'');}
-  if(!it.mesh||it.mesh==='No')it.mesh=_meshFromType(it.meshType);
-  if(!it.area&&it.width&&it.height)it.area=+((it.width*it.height)/1e6).toFixed(3);
-  if(!it.windowType&&it.designName)it.windowType=inferType(it.designName);
-  if(!it.profileMaterial&&it.profileType)it.profileMaterial=/alumin/i.test(it.profileType)?'Aluminium':'uPVC';
-  it.profileMaterial=it.profileMaterial||'uPVC';
-  it.qty=it.qty||1;it.rate=it.rate||0;it.amount=it.amount||(it.qty*it.rate);
-}
-
-/* ═══════════════════════════════════════════
+/* ═══════════════════════════════
    PREVIEW SYSTEM
-═══════════════════════════════════════════ */
+═══════════════════════════════ */
 function resetPreview(){
   const cv=g('mCanvas');cv.width=0;cv.height=0;cv.style.display='none';
-  g('mSVG').style.display='none';g('mImg').style.display='none';
-  g('prevLoading').style.display='none';g('prevErr').style.display='none';
-  g('tabPDF').style.display='none';g('tabImg').style.display='none';
-  g('tabSVG').classList.add('active');g('tabPDF').classList.remove('active');g('tabImg').classList.remove('active');
+  g('mSVG').style.display='none';
+  g('mImg').style.display='none';
+  g('prevLoading').style.display='none';
+  g('prevErr').style.display='none';
+  g('tabPDF').style.display='none';
+  g('tabImg').style.display='none';
+  g('tabSVG').classList.add('active');
+  g('tabPDF').classList.remove('active');
+  g('tabImg').classList.remove('active');
   g('previewBadge').textContent='Auto-generated';
   S.previewMode='svg';
 }
@@ -832,11 +1104,20 @@ function switchPreview(mode){
   g('mSVG').style.display=mode==='svg'?'block':'none';
   g('mCanvas').style.display=mode==='pdf'?'block':'none';
   g('mImg').style.display=mode==='img'?'block':'none';
-  ['svg','pdf','img'].forEach(m=>{const el=g('tab'+m.charAt(0).toUpperCase()+m.slice(1));if(el)el.classList.toggle('active',m===mode);});
+  ['SVG','PDF','Img'].forEach(m=>{
+    const el=g('tab'+m);
+    if(el)el.classList.toggle('active',m.toLowerCase()===mode);
+  });
 }
 
 function showSVGPreview(item){
-  const el=g('mSVG');el.innerHTML=genSVG(item);el.style.display='block';
+  try{
+    g('mSVG').innerHTML=genSVG(item);
+    g('mSVG').style.display='block';
+  }catch(e){
+    g('prevErr').textContent='Could not generate schematic.';
+    g('prevErr').style.display='block';
+  }
 }
 
 async function tryPDFPreview(item){
@@ -844,58 +1125,169 @@ async function tryPDFPreview(item){
   g('prevLoading').style.display='flex';
   try{
     const page=await S.pdfDoc.getPage(item._pageNo);
-    const sc=1.6, vp=page.getViewport({scale:sc});
-    const off=document.createElement('canvas');off.width=vp.width;off.height=vp.height;
+    const sc=1.8,vp=page.getViewport({scale:sc});
+    const off=document.createElement('canvas');
+    off.width=vp.width;off.height=vp.height;
     await page.render({canvasContext:off.getContext('2d'),viewport:vp}).promise;
-    // Crop to left drawing column, appropriate vertical half
+
+    // Detect drawing region: left ~44% of page, split vertically for 2 items per page
     const cropW=Math.floor(vp.width*0.44);
-    const yFrac=item._pagePos===0?0.07:0.47;
+    // Smarter Y: item 0 = top 42%, item 1 = mid 42%, else full page
+    let yFrac=0.05,hFrac=0.42;
+    if(item._pagePos===1){yFrac=0.48;hFrac=0.42;}
+    else if(item._pagePos>1){yFrac=0.0;hFrac=0.96;}
     const cropY=Math.floor(vp.height*yFrac);
-    const cropH=Math.floor(vp.height*0.40);
-    const cv=g('mCanvas');cv.width=cropW;cv.height=cropH;
+    const cropH=Math.floor(vp.height*hFrac);
+
+    // Confidence check: if crop too small, skip
+    if(cropW<80||cropH<80){g('prevLoading').style.display='none';return;}
+
+    const cv=g('mCanvas');
+    cv.width=cropW;cv.height=cropH;
+    cv.style.maxHeight='220px';cv.style.width='100%';cv.style.objectFit='contain';
     cv.getContext('2d').drawImage(off,0,cropY,cropW,cropH,0,0,cropW,cropH);
     cv.style.display='block';
     g('tabPDF').style.display='inline-flex';
     g('previewBadge').textContent='PDF drawing';
     g('prevLoading').style.display='none';
-    // Auto-switch to PDF if available
+    // Auto-switch to PDF tab
     switchPreview('pdf');
-    g('tabSVG').classList.remove('active');g('tabPDF').classList.add('active');
-  }catch(e){g('prevLoading').style.display='none';}
+  }catch(e){
+    g('prevLoading').style.display='none';
+    // Stay on SVG — silent fallback
+  }
 }
 
 function loadManualImg(){
   const it=S.current;if(!it)return;
   const url=IMG_MAP[it.designName]||IMG_MAP[it.windowType]||null;
-  if(!url){g('prevErr').textContent='No reference image available for this product type.';g('prevErr').style.display='block';return;}
+  if(!url){
+    g('prevErr').textContent='No reference image available for this product.';
+    g('prevErr').style.display='block';return;
+  }
   const im=g('mImg');
   im.onload=()=>{im.style.display='block';g('prevErr').style.display='none';g('tabImg').style.display='inline-flex';switchPreview('img');};
-  im.onerror=()=>{im.style.display='none';g('prevErr').textContent='Image failed to load.';g('prevErr').style.display='block';};
+  im.onerror=()=>{im.style.display='none';g('prevErr').textContent='Image could not be loaded.';g('prevErr').style.display='block';};
   im.src=url;
 }
 
-/* ═══════════════════════════════════════════
+/* ═══════════════════════════════
+   BENEFITS ENGINE
+═══════════════════════════════ */
+function benefits(item){
+  const seen=new Set();
+  const add=(ic,t)=>{if(!seen.has(t)){seen.add(t);return{ic,t};}return null;};
+  const res=[];
+  const push=(ic,t)=>{const r=add(ic,t);if(r)res.push(r);};
+
+  const gl=[item.glass,item.infill,item.infill1,item.infill2,item.infill3].filter(Boolean).join(' ').toLowerCase();
+  const ty=[item.designName,item.windowType].filter(Boolean).join(' ').toLowerCase();
+  const pt=(item.profileType||'').toLowerCase();
+  const lk=(item.lockingType||item.bsLockType||'').toLowerCase();
+
+  // Glass — sorted by specificity
+  if(/acoustic.*pvb|pvb.*acoustic/.test(gl))push('🔇','Acoustic PVB – significantly reduces external noise');
+  else if(/\bdgu\b|lam\b/.test(gl))push('🌡','Double glazing – enhanced thermal insulation');
+  if(/argon/.test(gl))push('⚡','Argon fill – superior energy efficiency');
+  if(/eco sense|enhance spring|solar control/.test(gl))push('☀️','Solar control glass – reduces heat gain & glare');
+  if(/stronglas|toughened|tempered|\bctg\b|\btg\b/.test(gl))push('🛡','AIS Stronglas – safety-grade toughened glass');
+  if(/frosted|milky/.test(gl))push('🫧','Privacy glass – obscures direct view');
+  if(/tinted|bronze tinted|dark grey/.test(gl))push('🕶','Tinted glass – reduces glare & solar heat');
+  if(/georgian bar/.test(gl))push('🏛','Georgian bar grid – elegant colonial aesthetics');
+  if(/laminated|lam\b/.test(gl)&&!/dgu/.test(gl))push('🛡','Laminated glass – holds together on breakage');
+
+  // Hardware
+  if(item.mesh==='Yes')push('🦟','Insect mesh – protection from mosquitoes & insects');
+  if(/multi.?point|mvd|cremone/.test(lk))push('🔐','Multi-point locking – high security');
+
+  // Window type benefits
+  if(/tilt.{0,6}turn/.test(ty))push('💨','Tilt & turn – dual-mode: tilt for air, turn for cleaning');
+  else if(/casement/.test(ty)&&!/door/.test(ty))push('🌬','Casement – excellent seal & controlled ventilation');
+  if(/twin.?sash/.test(ty))push('💨','Twin sash – top & bottom panels for flexible ventilation');
+  if(/sliding/.test(ty)&&!/door/.test(ty))push('📐','Sliding – space-efficient, no swing clearance needed');
+  if(/sliding door|slider door/.test(ty))push('🚪','Sliding door – wide opening, indoor-outdoor flow');
+  if(/slide.{0,6}fold|s and f/.test(ty))push('🚪','Slide & fold – full wall opening, flood of natural light');
+  if(/bay/.test(ty))push('✨','Bay window – panoramic views & premium aesthetics');
+  if(/corner|g2g/.test(ty))push('🏗','Glass-to-glass corner – unobstructed wrap-around view');
+  if(/arch/.test(ty))push('🏛','Arch window – distinctive architectural statement');
+  if(/curtain.?wall|^cw$/.test(ty))push('🏢','Curtain wall – maximum glazed facade, flood of daylight');
+  if(/louv|louvre/.test(ty))push('🌀','Louvre – directional ventilation with light control');
+
+  // Profile
+  if(/upvc|pvc/.test(pt))push('🔧','uPVC – termite-proof, low maintenance, weather resistant');
+  if(/alumin/.test(pt))push('💪','Aluminium – high strength with slim, modern sight lines');
+
+  // Area
+  if((parseFloat(item.area)||0)>3)push('🌅','Large glazed area – maximises natural light & views');
+
+  return res.slice(0,6);// cap at 6 benefits
+}
+
+/* ═══════════════════════════════
+   SPEECH
+═══════════════════════════════ */
+function buildSpeech(item){
+  const bens=benefits(item).map(b=>b.t).join('; ');
+  const pm=item.profileMaterial||'uPVC';
+  const ty=item.windowType||'window';
+  const wh=item.width&&item.height?`width ${item.width} millimetres and height ${item.height} millimetres, `:'';
+  const ar=item.area?`area ${item.area} square metres, `:'';
+  const gl=item.glass?`The glass is ${item.glass}. `:'';
+  const ms=item.mesh==='Yes'?'Insect mesh is included. ':'';
+  const lk=item.lockingType&&!/^n\/a$/i.test(item.lockingType)?`It has ${item.lockingType}. `:'';
+  return`Item ${item.slNo}. This is ${/^[aeiou]/i.test(pm)?'an':'a'} ${pm} ${ty}, ${wh}${ar}${item.series?'series '+item.series+'. ':''}${gl}${ms}${lk}${bens?'Key benefits: '+bens+'.':''}`.replace(/\s+/g,' ').trim();
+}
+
+function speakItem(item,btn){
+  if(!('speechSynthesis' in window)){toast('Speech not supported in this browser','err');return;}
+  if(S.speaking){
+    speechSynthesis.cancel();S.speaking=false;
+    document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));
+    if(S.speakBtn===btn)return;
+  }
+  const utt=new SpeechSynthesisUtterance(buildSpeech(item));
+  utt.rate=0.95;utt.pitch=1;
+  const done=()=>{S.speaking=false;S.speakBtn=null;document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));};
+  utt.onend=done;utt.onerror=done;
+  S.speaking=true;S.speakBtn=btn;
+  if(btn)btn.classList.add('on');
+  speechSynthesis.speak(utt);
+}
+function speakCurrent(){if(S.current)speakItem(S.current,g('mSpeakBtn'));}
+
+/* ═══════════════════════════════
    FILTERS
-═══════════════════════════════════════════ */
+═══════════════════════════════ */
 function applyFilters(){
   const q=(g('fSearch').value||'').toLowerCase();
   const ty=g('fType').value.toLowerCase();
   const pr=g('fProfile').value.toLowerCase();
   const ms=g('fMesh').value.toLowerCase();
   S.filtered=S.items.filter(it=>{
-    if(q){const h=[it.designName,it.profileType,it.glass,it.windowType,it.designRef,it.lockingType,it.handleType,it.series].filter(Boolean).join(' ').toLowerCase();if(!h.includes(q))return false;}
+    if(q){
+      const h=[it.designName,it.profileType,it.glass,it.windowType,it.designRef,it.lockingType,it.handleType,it.series].filter(Boolean).join(' ').toLowerCase();
+      if(!h.includes(q))return false;
+    }
     if(ty&&!(it.windowType||'').toLowerCase().includes(ty))return false;
-    if(pr){const pm=(it.profileMaterial||'').toLowerCase();if(pr==='upvc'&&!/upvc|pvc/.test(pm))return false;if(pr==='alum'&&!/alumin/.test(pm))return false;}
-    if(ms){const m=(it.mesh||'').toLowerCase();if(ms==='yes'&&m!=='yes')return false;if(ms==='no'&&m==='yes')return false;}
+    if(pr){
+      const pm=(it.profileMaterial||'').toLowerCase();
+      if(pr==='upvc'&&!/upvc|pvc/.test(pm))return false;
+      if(pr==='alum'&&!/alumin/.test(pm))return false;
+    }
+    if(ms){
+      const m=(it.mesh||'').toLowerCase();
+      if(ms==='yes'&&m!=='yes')return false;
+      if(ms==='no'&&m==='yes')return false;
+    }
     return true;
   });
   renderCards();
   g('fCount').textContent=`${S.filtered.length} of ${S.items.length} shown`;
 }
 
-/* ═══════════════════════════════════════════
-   RENDER CARDS
-═══════════════════════════════════════════ */
+/* ═══════════════════════════════
+   RENDER — CARDS
+═══════════════════════════════ */
 function renderCards(){
   const grid=g('cardsGrid'),empty=g('emptyFilter');
   if(!S.filtered.length){grid.innerHTML='';empty.style.display='block';return;}
@@ -912,71 +1304,92 @@ function cardHTML(it){
   const area=it.area?`${it.area} m²`:'';
   const wt=it.weight?`${it.weight} kg`:'';
   const glFull=(it.glass||'No glass data').replace(/\s+/g,' ');
-  const gl60=glFull.length>60?glFull.slice(0,60)+'…':glFull;
+  const gl60=glFull.length>62?glFull.slice(0,62)+'…':glFull;
   const amt=it.amount?'₹'+Number(it.amount).toLocaleString('en-IN'):'—';
   const bens=benefits(it).slice(0,3);
-  return `<div class="item-card ${barCls}" onclick="openModal(${it.slNo})">
+  const seriesShort=it.series?it.series.replace(/^AIS\s+/i,'').replace(/\s*SERIES\s*$/i,'').trim():'';
+  return`<div class="item-card ${barCls}" onclick="openModal(${it.slNo})">
 <div class="c-head"><div class="c-num">${it.slNo}</div><div class="c-head-r">
 <div class="c-title">${esc(it.designName||it.designRef||'Window Item')}</div>
-<div class="c-chips"><span class="chip ${pmCls}">${esc(pm)}</span>${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}</div>
-</div></div>
-<div class="c-dims"><span class="c-dim-v">${dims} mm</span>${area?`<span class="c-sep">·</span><span>${area}</span>`:''} ${wt?`<span class="c-sep">·</span><span>${wt}</span>`:''}</div>
+<div class="c-chips">
+<span class="chip ${pmCls}">${esc(pm)}</span>
+${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}
+${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}
+</div></div></div>
+<div class="c-dims"><span class="c-dim-v">${dims} mm</span>${area?`<span class="c-sep">·</span><span>${area}</span>`:''}${wt?`<span class="c-sep">·</span><span>${wt}</span>`:''}</div>
 <div class="c-glass"><span class="c-glass-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><polyline points="17 2 12 7 7 2"/></svg></span><span>${esc(gl60)}</span></div>
 ${bens.length?`<div class="c-benefits">${bens.map(b=>`<span class="btag">${b.ic} ${esc(b.t)}</span>`).join('')}</div>`:''}
-<div class="c-foot"><div class="c-price">${esc(amt)}<span class="c-qty">×${it.qty}</span></div>
-<div class="c-acts"><button class="btn btn-speak btn-sm" onclick="event.stopPropagation();cardSpeak(${it.slNo},this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Speak</button>
-<button class="btn btn-sm" onclick="event.stopPropagation();openModal(${it.slNo})">Details</button></div></div>
-</div>`;
+<div class="c-foot">
+<div class="c-price">${esc(amt)}<span class="c-qty"> ×${it.qty}</span></div>
+<div class="c-acts">
+<button class="btn btn-speak btn-sm" onclick="event.stopPropagation();cardSpeak(${it.slNo},this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Speak</button>
+<button class="btn btn-sm" onclick="event.stopPropagation();openModal(${it.slNo})">Details</button>
+</div></div></div>`;
 }
 function cardSpeak(slNo,btn){const it=S.items.find(i=>i.slNo===slNo);if(it)speakItem(it,btn);}
 
-/* ═══════════════════════════════════════════
+/* ═══════════════════════════════
    MODAL
-═══════════════════════════════════════════ */
+═══════════════════════════════ */
 function openModal(slNo){
-  const it=S.items.find(i=>i.slNo===slNo);if(!it)return;
-  S.current=it;
-  const isAlum=/alumin/i.test(it.profileMaterial||'');
-  const pm=it.profileMaterial||'uPVC';
-  g('mTitle').textContent=it.designName||it.designRef||`Item ${it.slNo}`;
-  g('mChips').innerHTML=`<span class="chip ${isAlum?'chip-alum':'chip-upvc'}">${esc(pm)}</span>${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}${it.profileType?`<span class="chip chip-type">${esc(it.profileType)}</span>`:''}${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}`;
+  try{
+    const it=S.items.find(i=>i.slNo===slNo);if(!it)return;
+    S.current=it;
+    const isAlum=/alumin/i.test(it.profileMaterial||'');
+    g('mTitle').textContent=it.designName||it.designRef||`Item ${it.slNo}`;
+    g('mChips').innerHTML=`
+<span class="chip ${isAlum?'chip-alum':'chip-upvc'}">${esc(it.profileMaterial||'uPVC')}</span>
+${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}
+${it.profileType?`<span class="chip chip-type">${esc(it.profileType)}</span>`:''}
+${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}`;
 
-  // Reset + show preview
-  resetPreview();
-  showSVGPreview(it);
+    resetPreview();
+    showSVGPreview(it);
+    if(IMG_MAP[it.designName]||IMG_MAP[it.windowType])g('tabImg').style.display='inline-flex';
+    tryPDFPreview(it);// async, non-blocking
 
-  // Check if manual image exists → show tab
-  if(IMG_MAP[it.designName]||IMG_MAP[it.windowType]){g('tabImg').style.display='inline-flex';}
+    const flds=[
+      ['Design Ref',it.designRef||null],
+      ['Series',it.series||null],
+      ['Window / Door Type',it.windowType||null],
+      ['Profile Type',it.profileType||null],
+      ['Profile Color',it.profileColor||null],
+      ['Width (mm)',it.width||null],
+      ['Height (mm)',it.height||null],
+      ['Area (m²)',it.area||null],
+      ['Area (sqft)',it.areaSqft||null],
+      ['Weight (kg)',it.weight||null],
+      ['Quantity',it.qty],
+      ['Glass / Infill',it.glass||null,'span-all'],
+      ['Mesh',it.mesh||null],
+      ['Mesh Type',it.meshType||null],
+      ['Handle Type',it.handleType||null],
+      ['Handle Color',it.handleColor||null],
+      ['Locking Type',it.lockingType||null],
+      ['Fittings Supplier',it.fittingsSupplier||null],
+      ['Seal Type',it.sealType||null],
+      ['Rate (INR)',it.rate?'₹'+Number(it.rate).toLocaleString('en-IN'):null,'','hl'],
+      ['Amount (INR)',it.amount?'₹'+Number(it.amount).toLocaleString('en-IN'):null,'','hl'],
+    ].filter(([,v])=>v!=null&&v!=='');
 
-  // Try PDF rendering async
-  tryPDFPreview(it);
-
-  const flds=[
-    ['Design Ref',it.designRef],['Series',it.series],['Window / Door Type',it.windowType],
-    ['Profile Type',it.profileType],['Profile Color',it.profileColor],
-    ['Width (mm)',it.width||null],['Height (mm)',it.height||null],
-    ['Area (m²)',it.area||null],['Area (sqft)',it.areaSqft||null],['Weight (kg)',it.weight||null],
-    ['Quantity',it.qty],
-    ['Glass / Infill',it.glass,'span-all'],
-    ['Mesh',it.mesh],['Mesh Type',it.meshType],
-    ['Handle Type',it.handleType],['Handle Color',it.handleColor],
-    ['Locking Type',it.lockingType],['Fittings Supplier',it.fittingsSupplier],
-    ['Rate (INR)',it.rate?'₹'+Number(it.rate).toLocaleString('en-IN'):null,'','hl'],
-    ['Amount (INR)',it.amount?'₹'+Number(it.amount).toLocaleString('en-IN'):null,'','hl'],
-  ].filter(f=>f[1]!=null&&f[1]!=='');
-
-  const bens=benefits(it);
-  g('mBody').innerHTML=`
+    const bens=benefits(it);
+    g('mBody').innerHTML=`
 <div class="m-section"><div class="m-sec-title">Product Specifications</div>
 <div class="detail-grid">${flds.map(([lbl,val,span,cls])=>`<div class="d-item${span?' '+span:''}"><span class="d-lbl">${esc(lbl)}</span><span class="d-val${cls?' '+cls:''}">${esc(String(val))}</span></div>`).join('')}</div></div>
 ${bens.length?`<div class="m-section"><div class="m-sec-title">Benefits &amp; Value Proposition</div><div class="benefits-list">${bens.map(b=>`<div class="b-item"><span class="b-ic">${b.ic}</span><span>${esc(b.t)}</span></div>`).join('')}</div></div>`:''}
 ${it.remarks?`<div class="m-section"><div class="m-sec-title">Remarks</div><p style="font-size:13px;color:var(--t2);line-height:1.6">${esc(it.remarks)}</p></div>`:''}`;
 
-  g('modalBg').classList.add('open');document.body.style.overflow='hidden';
+    g('modalBg').classList.add('open');
+    document.body.style.overflow='hidden';
+  }catch(e){
+    console.error('openModal error',e);
+    toast('Could not open item details','err');
+  }
 }
 
 function closeModal(){
-  g('modalBg').classList.remove('open');document.body.style.overflow='';
+  g('modalBg').classList.remove('open');
+  document.body.style.overflow='';
   if(S.speaking){speechSynthesis.cancel();S.speaking=false;}
   document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));
   S.current=null;
@@ -984,9 +1397,9 @@ function closeModal(){
 g('modalBg').addEventListener('click',e=>{if(e.target===g('modalBg'))closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-/* ═══════════════════════════════════════════
+/* ═══════════════════════════════
    SUMMARY STRIP
-═══════════════════════════════════════════ */
+═══════════════════════════════ */
 function updateSummary(items){
   const totArea=items.reduce((s,i)=>s+(parseFloat(i.area)||0)*(i.qty||1),0);
   const totWt=items.reduce((s,i)=>s+(parseFloat(i.weight)||0)*(i.qty||1),0);
@@ -1001,12 +1414,13 @@ function updateSummary(items){
   if(upvcCnt)mix.innerHTML+=`<span class="chip chip-upvc">${upvcCnt} uPVC</span>`;
   if(alumCnt)mix.innerHTML+=`<span class="chip chip-alum">${alumCnt} Alum</span>`;
   show('sumStrip');show('filtersBar');
-  g('cardsSection').style.display='block';g('emptyInit').style.display='none';
+  g('cardsSection').style.display='block';
+  g('emptyInit').style.display='none';
 }
 
-/* ═══════════════════════════════════════════
+/* ═══════════════════════════════
    LOAD FLOW
-═══════════════════════════════════════════ */
+═══════════════════════════════ */
 async function handleFile(file){
   if(!file||!file.name.toLowerCase().endsWith('.pdf')){setStatus('err','Please select a valid PDF file.');return;}
   setStatus('loading',`Reading "${file.name}"…`);
@@ -1014,61 +1428,97 @@ async function handleFile(file){
     const raw=await extractPDF(file);
     setStatus('loading','Parsing quotation line items…');
     const items=parseQuotation(raw);
-    if(!items.length){setStatus('err','No line items detected. Please ensure this is an AIS Windows PI/quotation PDF.');return;}
+    if(!items.length){
+      setStatus('err','No line items found. Please check this is an AIS Windows PI or quotation PDF.');
+      return;
+    }
+    const partial=items.filter(i=>!i.designName||!(i.width>0)).length;
     loadItems(items);
-    setStatus('ok',`✓ Parsed ${items.length} line items successfully.`);
+    if(partial>0&&partial<items.length){
+      setStatus('ok',`✓ Parsed ${items.length} items (${partial} partially — check details).`);
+    }else{
+      setStatus('ok',`✓ Parsed ${items.length} line items successfully.`);
+    }
     toast(`${items.length} items loaded`,'ok');
-  }catch(e){console.error(e);setStatus('err','Error: '+(e.message||'Unknown error'));}
-}
-function loadItems(items){S.items=items;S.filtered=[...items];updateSummary(items);applyFilters();}
-function loadDemo(){
-  S.pdfDoc=null;
-  const items=DEMO.map(d=>{const c=Object.assign({},d);finalizeItem(c);return c;});
-  loadItems(items);setStatus('ok',`✓ Demo quotation loaded – ${items.length} items.`);
+  }catch(e){
+    console.error(e);
+    setStatus('err','Error reading PDF: '+(e.message||'Unknown error. Try re-uploading.'));
+  }
 }
 
-/* ═══════════════════════════════════════════
+function loadItems(items){
+  S.items=items;S.filtered=[...items];
+  updateSummary(items);applyFilters();
+}
+
+function loadDemo(){
+  S.pdfDoc=null;
+  const items=DEMO.map(d=>{const c=Object.assign({},d);try{finalizeItem(c);}catch(e){}return c;});
+  loadItems(items);
+  setStatus('ok',`✓ Demo quotation loaded – ${items.length} items.`);
+}
+
+/* ═══════════════════════════════
    EXPORT & COPY
-═══════════════════════════════════════════ */
-function download(content,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href);toast(`Downloaded ${name}`,'ok');}
-function doExportJSON(){if(!S.filtered.length){toast('No data','err');return;}download(JSON.stringify(S.filtered,null,2),'ais-quotation.json','application/json');}
+═══════════════════════════════ */
+function download(content,name,type){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=name;a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Downloaded ${name}`,'ok');
+}
+function doExportJSON(){
+  if(!S.filtered.length){toast('No data to export','err');return;}
+  // Strip internal fields from export
+  const clean=S.filtered.map(i=>{const c=Object.assign({},i);delete c._pageNo;delete c._pagePos;delete c._conf;delete c._src;return c;});
+  download(JSON.stringify(clean,null,2),'ais-quotation.json','application/json');
+}
 function doExportCSV(){
-  if(!S.filtered.length){toast('No data','err');return;}
-  const H=['Sl.No.','Design Name','Type','Series','Profile','Profile Color','Width mm','Height mm','Area m²','Area sqft','Weight kg','Glass','Mesh','Mesh Type','Handle','Handle Color','Locking','Fittings','Qty','Rate INR','Amount INR','Remarks'];
-  const R=S.filtered.map(i=>[i.slNo,i.designName||'',i.windowType||'',i.series||'',i.profileType||'',i.profileColor||'',i.width||'',i.height||'',i.area||'',i.areaSqft||'',i.weight||'',i.glass||'',i.mesh||'',i.meshType||'',i.handleType||'',i.handleColor||'',i.lockingType||'',i.fittingsSupplier||'',i.qty||'',i.rate||'',i.amount||'',i.remarks||'']);
+  if(!S.filtered.length){toast('No data to export','err');return;}
+  const H=['Sl.No.','Design Name','Type','Series','Profile Material','Profile Type','Profile Color','Width mm','Height mm','Area m²','Area sqft','Weight kg','Glass','Mesh','Mesh Type','Handle','Handle Color','Locking','Fittings','Qty','Rate INR','Amount INR','Remarks'];
+  const R=S.filtered.map(i=>[i.slNo,i.designName||'',i.windowType||'',i.series||'',i.profileMaterial||'',i.profileType||'',i.profileColor||'',i.width||'',i.height||'',i.area||'',i.areaSqft||'',i.weight||'',i.glass||'',i.mesh||'',i.meshType||'',i.handleType||'',i.handleColor||'',i.lockingType||'',i.fittingsSupplier||'',i.qty||'',i.rate||'',i.amount||'',i.remarks||'']);
   const csv=[H,...R].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   download(csv,'ais-quotation.csv','text/csv');
 }
 function doCopyAll(){
-  if(!S.filtered.length){toast('No data','err');return;}
-  const txt=S.filtered.map(i=>{const b=benefits(i).map(b=>b.t).join(', ');return`Item ${i.slNo}: ${i.designName||''} | ${i.profileMaterial||''} | ${i.width}×${i.height}mm | ₹${(i.amount||0).toLocaleString('en-IN')}\nGlass: ${i.glass||''}\nBenefits: ${b}`;}).join('\n\n');
-  navigator.clipboard.writeText(txt).then(()=>toast('Copied','ok')).catch(()=>toast('Copy failed','err'));
+  if(!S.filtered.length){toast('No data to copy','err');return;}
+  const txt=S.filtered.map(i=>{
+    const b=benefits(i).map(b=>b.t).join(', ');
+    return`Item ${i.slNo}: ${i.designName||''} | ${i.profileMaterial||''} | ${i.width}×${i.height}mm | ₹${(i.amount||0).toLocaleString('en-IN')}\nGlass: ${i.glass||''}\nBenefits: ${b}`;
+  }).join('\n\n');
+  navigator.clipboard.writeText(txt).then(()=>toast('Copied to clipboard','ok')).catch(()=>toast('Copy failed','err'));
 }
-function copyCurrentSummary(){if(!S.current)return;navigator.clipboard.writeText(buildSpeech(S.current)).then(()=>toast('Copied','ok')).catch(()=>toast('Failed','err'));}
+function copyCurrentSummary(){
+  if(!S.current)return;
+  navigator.clipboard.writeText(buildSpeech(S.current)).then(()=>toast('Copied','ok')).catch(()=>toast('Failed','err'));
+}
 
-/* ═══════════════════════════════════════════
-   THEME & UTILS
-═══════════════════════════════════════════ */
+/* ═══════════════════════════════
+   THEME
+═══════════════════════════════ */
 function toggleTheme(){
   const dark=document.documentElement.dataset.theme==='dark';
   document.documentElement.dataset.theme=dark?'light':'dark';
-  g('themeIco').innerHTML=dark?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>':'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  g('themeIco').innerHTML=dark
+    ?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    :'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
 }
-function g(id){return document.getElementById(id);}
-function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function show(id){g(id).classList.add('show');}
-let _sT;
-function setStatus(type,msg){clearTimeout(_sT);const c=g('statusCard');c.className='status-card show '+type;g('statusSpin').style.display=type==='loading'?'block':'none';g('statusMsg').textContent=msg;if(type!=='loading')_sT=setTimeout(()=>c.classList.remove('show'),5000);}
-function toast(msg,type=''){const w=g('toastWrap'),t=document.createElement('div');t.className='toast '+type;t.textContent=msg;w.appendChild(t);setTimeout(()=>{t.style.cssText='opacity:0;transform:translateX(12px);transition:all .25s';setTimeout(()=>t.remove(),260);},2800);}
 
-/* ═══════════════════════════════════════════
-   EVENT LISTENERS
-═══════════════════════════════════════════ */
-g('pdfInput').addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);e.target.value='';});
+/* ═══════════════════════════════
+   EVENTS
+═══════════════════════════════ */
+g('pdfInput').addEventListener('change',e=>{
+  if(e.target.files[0])handleFile(e.target.files[0]);
+  e.target.value='';
+});
 const dz=g('dropZone');
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
 dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('over');
+  const f=e.dataTransfer.files[0];if(f)handleFile(f);
+});
 </script>
 </body>
 </html>
