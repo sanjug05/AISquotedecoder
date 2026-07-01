@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AIS Window Quote Decoder</title>
+<link rel="manifest" id="manifestLink">
+<meta name="theme-color" content="#3d6af5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AIS Decoder">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
@@ -211,6 +216,19 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 @media(max-width:768px){.hero{padding:36px 18px 30px}.cards-section{padding:16px 14px}.sum-stats{gap:14px}.s-val{font-size:17px}.s-div{height:28px}}
 @media(max-width:480px){.app-hdr{padding:0 14px}.f-search,.f-select{min-width:100%;width:100%}.cards-grid{grid-template-columns:1fr}.brand-name{display:none}.sum-strip{padding:14px 16px}}
+
+/* ── PWA ── */
+.update-bar{position:fixed;top:54px;left:0;right:0;z-index:300;background:var(--accent);color:#fff;padding:10px 20px;display:none;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:500;box-shadow:0 2px 12px rgba(61,106,245,.4)}
+.update-bar.show{display:flex}
+.update-bar .btn-u{padding:5px 14px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s}
+.update-bar .btn-u:hover{background:rgba(255,255,255,.28)}
+.update-bar .cls{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:16px;padding:0 4px;line-height:1}
+#installBtn{display:none}
+/* ── Spec groups ── */
+.spec-group{margin-bottom:20px}
+.spec-group:last-child{margin-bottom:0}
+.sg-title{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--accent-dim)}
+
 </style>
 </head>
 <body>
@@ -222,12 +240,14 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <span class="brand-name">AIS <em>Quote</em> Decoder</span>
   </a>
   <div class="hdr-r">
+    <button class="btn btn-ghost btn-icon" id="installBtn" onclick="installApp()" title="Install App"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <button class="btn btn-ghost btn-icon" onclick="toggleTheme()" title="Toggle theme">
       <svg id="themeIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
   </div>
 </header>
 
+<div class="update-bar" id="updateBar"><span>🔄 A new version is available</span><button class="btn-u" onclick="applyUpdate()">Update Now</button><button class="cls" onclick="g('updateBar').classList.remove('show')" aria-label="Dismiss">✕</button></div>
 <section class="hero">
   <div class="hero-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Channel Partner Intelligence</div>
   <h1 class="hero-title">Decode Any AIS Windows<br><span class="hl">Quotation Instantly</span></h1>
@@ -346,84 +366,36 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 if(typeof pdfjsLib!=='undefined')
   pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-/* ═══════════════════════════════
-   STATE
-═══════════════════════════════ */
-const S={
-  items:[],filtered:[],current:null,
-  speaking:false,speakBtn:null,
-  pdfDoc:null,previewMode:'svg',
-  toastActive:new Set()
-};
+/* ═══ CONSTANTS ══════════════════════════════════════ */
+const APP_VERSION='2.5.0';
+const APP_NAME='AIS Window Quote Decoder';
+const IMG_MAP={/* 'DESIGN NAME':'https://...' – internal only */};
 
-/* ═══════════════════════════════
-   CONSTANTS
-═══════════════════════════════ */
-const IMG_MAP={/* 'DESIGN NAME':'https://...' — internal only, never shown in UI */};
+/* ═══ STATE ══════════════════════════════════════════ */
+const S={items:[],filtered:[],current:null,speaking:false,speakBtn:null,pdfDoc:null,previewMode:'svg',toastActive:new Set()};
 
+/* ═══ DEMO ═══════════════════════════════════════════ */
 const DEMO=[
-  {slNo:1,designName:'TILT AND TURN',windowType:'Tilt & Turn',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WALNUT',series:'AIS ECO 62MM CASEMENT SERIES',width:750,height:1500,areaSqft:12.11,area:1.124,weight:45.85,glass:'(1) AIS DGU LAM – 4MM CTG + 1.52MM ACOUSTIC PVB + 4MM CTG + 10MM ARGON GAP + 6MM CTG',meshType:'No',mesh:'No',handleType:'Window Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:39748,amount:39748,remarks:'',_pageNo:4,_pagePos:0,_conf:95},
-  {slNo:2,designName:'SLIDER WINDOW WITH TOP FIX',windowType:'Sliding',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'GOLDEN OAK',series:'AIS ECOPRIME 62MM SLIDING SERIES',width:1300,height:2100,areaSqft:29.39,area:2.730,weight:94.41,glass:'(1,2,3,4) AIS Stronglas - 5MM BRONZE TINTED TG',meshType:'(5) AIS-FIBRE MESH',mesh:'Yes',handleType:'Sliding Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:59142,amount:59142,remarks:'',_pageNo:4,_pagePos:1,_conf:95},
-  {slNo:3,designName:'SLIDER DOOR',windowType:'Sliding Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM SLIDING SERIES',width:1800,height:2250,areaSqft:43.59,area:4.050,weight:141.0,glass:'(1,2) AIS Stronglas - 6MM Clear Toughned',meshType:'(3,4) AIS-SS MESH',mesh:'Yes',handleType:'Sliding Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:58989,amount:58989,remarks:'',_pageNo:5,_pagePos:0,_conf:95},
-  {slNo:4,designName:'CASEMENT DOOR',windowType:'Casement Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:900,height:2250,areaSqft:21.80,area:2.025,weight:71.68,glass:'(1) AIS DGU - 5MM CTG + 14mm Georgian Bar + Argon Gap + 5MM CTG',meshType:'No',mesh:'No',handleType:'Casement Double Side Door Handle',handleColor:'WHITE',lockingType:'Multi Point MVD Locking',fittingsSupplier:'AIS HW',qty:1,rate:48234,amount:48234,remarks:'',_pageNo:5,_pagePos:1,_conf:95},
-  {slNo:5,designName:'BAY WINDOW',windowType:'Bay Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'MAHOGANY',series:'AIS ECOPRIME 62MM CASEMENT SERIES',width:2400,height:1500,areaSqft:38.75,area:3.600,weight:135.7,glass:'(1,2,3) AIS Stronglas - 6MM ECO SENSE ENHANCE SPRING PLUS TG',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'BROWN',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:61481,amount:61481,remarks:'',_pageNo:6,_pagePos:0,_conf:95},
-  {slNo:6,designName:'TWIN SASH',windowType:'Twin Sash',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'ANTHRACITE GREY',series:'AIS ECOPRIME 112MM CASEMENT TWIN SASH SERIES',width:1300,height:1500,areaSqft:20.99,area:1.950,weight:74.72,glass:'(1,2) AIS Stronglas - 5MM DARK GREY TINTED TG',meshType:'(3,4) AIS-PET RESISTANCE MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'BLACK',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:62383,amount:62383,remarks:'',_pageNo:6,_pagePos:1,_conf:95},
-  {slNo:7,designName:'TOP HUNG CUM LOUVERS',windowType:'Louvre',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:650,height:2250,areaSqft:15.75,area:1.463,weight:53.77,glass:'(1) AIS Stronglas - 5MM FROSTED TG + (2) AIS LAM - 4MM CTG + 1.52MM MILKY PVB + 4MM CTG',meshType:'(0) PULL DOWN MESH',mesh:'Yes',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:27334,amount:27334,remarks:'6 INCH EXHAUST CUT AT MIDDLE CENTER',_pageNo:7,_pagePos:0,_conf:95},
-  {slNo:8,designName:'FIXED ARCH CUM FRENCH WINDOW',windowType:'Arch Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:1300,height:1500,areaSqft:19.10,area:1.774,weight:59.60,glass:'(1,2,3) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Casement Espag Handle',handleColor:'WHITE',lockingType:'Multi Point Lock',fittingsSupplier:'AIS HW',qty:1,rate:28245,amount:28245,remarks:'',_pageNo:7,_pagePos:1,_conf:95},
-  {slNo:9,designName:'SLIDE AND FOLD',windowType:'Slide & Fold',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO INVENTA SLIDE & FOLD',width:3000,height:2250,areaSqft:72.66,area:6.750,weight:172.3,glass:'(1,2,3,4) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',handleType:'Fold & Slide Lockable Handle',handleColor:'WHITE',lockingType:'N/A',fittingsSupplier:'AIS HW',qty:1,rate:231363,amount:231363,remarks:'',_pageNo:8,_pagePos:0,_conf:95},
+  {slNo:1,designName:'TILT AND TURN',windowType:'Tilt & Turn',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WALNUT',series:'AIS ECO 62MM CASEMENT SERIES',width:750,height:1500,areaSqft:12.11,area:1.125,weight:45.854,glass:'(1) AIS DGU LAM – 4MM CTG + 1.52MM ACOUSTIC PVB + 4MM CTG + 10MM ARGON GAP + 6MM CTG',meshType:'No',mesh:'No',outerFrame:'62 /PC62-UF-01-WN',casementSash:'75 /PC62-US-02-WN',handleType:'S1-Window Handle',handleColor:'BROWN',handleHeight:'S1 - 723(Cavity level)',lockingType:'Multi Point Lock',frictionStay:'Stay Hinge',hinge:'Bottom Frame Hinge, Frame Top Hinge, Frame Top Hinge Pin, Sash Corner Hinge',silicon:'BROWN',fittingsSupplier:'AIS HW',qty:1,rate:39748,amount:39748,remarks:'',_pageNo:4,_pagePos:0,_conf:95},
+  {slNo:2,designName:'SLIDER WINDOW WITH TOP FIX',windowType:'Sliding',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'GOLDEN OAK',series:'AIS ECOPRIME 62MM SLIDING SERIES , AIS ECOPRIME 62MM CASEMENT SERIES',width:1300,height:2100,areaSqft:29.39,area:2.730,weight:94.414,glass:'(1,2,3,4) AIS Stronglas - 5MM BRONZE TINTED TG',meshType:'(5) AIS-FIBRE MESH',mesh:'Yes',outerFrame:'62 /P62F002G3BEXGGD',track:'112 /PSLF002G3MXXGGD',slidingSash:'68 /PSLSS01G3MEXGGH',handleType:'S1-Sliding Espag Handle, S2-Sliding Espag Handle',flymeshHandle:'S3-SLIDING C HANDLE',handleColor:'BLACK',handleHeight:'S1,S2 - 711(Cavity level)',lockingType:'Multi Point Lock, Multi Point Lock',bsLockType:'Non-Lockable Handle',coupler:'COUPLER 16MM X 114MM',mullion:'CMT T MULLION 62MM X 80MM (P62TT02G3MEXGGC)',silicon:'BROWN',fittingsSupplier:'AIS HW',qty:1,rate:59142,amount:59142,remarks:'',_pageNo:4,_pagePos:1,_conf:95},
+  {slNo:3,designName:'SLIDER DOOR',windowType:'Sliding Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM SLIDING SERIES',width:1800,height:2250,areaSqft:43.59,area:4.050,weight:141.015,glass:'(1,2) AIS Stronglas - 6MM Clear Toughned',meshType:'(3,4) AIS-SS MESH',mesh:'Yes',track:'112 /PS62-UF-02',slidingSash:'79 /PS62-US-04',handleType:'S1-Sliding Espag Handle, S2-D Handle I1_O1 Bs Lock',flymeshHandle:'S3-SLIDING POP UP HANDLE',handleColor:'WHITE',handleHeight:'S1,S2 - 1012(Cavity level)',lockingType:'Multi Point Lock, Multipoint Lock With Cyl',bsLockType:'Multi Point Lock',mullion:'SLIDING SASH MULLION 42MM X 68MM(PS62-UT-02)',cylinder:'Cylinder Key To Key 60Mm',silicon:'WHITE',fittingsSupplier:'AIS HW',qty:1,rate:58989,amount:58989,remarks:'',_pageNo:5,_pagePos:0,_conf:95},
+  {slNo:4,designName:'CASEMENT DOOR',windowType:'Casement Door',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:900,height:2250,areaSqft:21.80,area:2.025,weight:71.684,glass:'(1) AIS DGU - 5MM CTG + 14mm (Silver Spacer + 18mm White Georgian Bar + Argon Gap) + 5MM CTG',meshType:'No',mesh:'No',outerFrame:'PAM124, 62 /PC62-UF-02',casementSash:'102 /PC62-US-04',handleType:'S1-Casement Double Side Door Handle',handleColor:'WHITE',handleHeight:'S1 - 1012(Cavity level)',lockingType:'Multi Point MVD Locking',hinge:'3D Hinges',cylinder:'Cylinder Key To Knob 90Mm',silicon:'WHITE',fittingsSupplier:'AIS HW',qty:1,rate:48234,amount:48234,remarks:'',_pageNo:5,_pagePos:1,_conf:95},
+  {slNo:5,designName:'BAY WINDOW',windowType:'Bay Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'MAHOGANY',series:'AIS ECOPRIME 62MM CASEMENT SERIES',width:2400,height:1500,areaSqft:38.75,area:3.600,weight:135.658,glass:'(1,2,3) AIS Stronglas- 6MM ECO SENSE ENHANCE SPRING PLUS TG',meshType:'No',mesh:'No',outerFrame:'62 /P62F002W1MEXMMD',casementSash:'75 /P62SC02B1MEMMA',handleType:'S1-Casement Espag Handle, S2-Casement Espag Handle',handleColor:'BROWN',handleHeight:'S1,S2 - 721(Cavity level)',lockingType:'Multi Point Lock, Multi Point Lock',frictionStay:'Hd Friction Stay 16"',coupler:'ROUND POST',silicon:'BROWN',fittingsSupplier:'AIS HW',qty:1,rate:61481,amount:61481,remarks:'',_pageNo:6,_pagePos:0,_conf:95},
+  {slNo:6,designName:'TWIN SASH',windowType:'Twin Sash',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'ANTHRACITE GREY',series:'AIS ECOPRIME 112MM CASEMENT TWIN SASH SERIES',width:1300,height:1500,areaSqft:20.99,area:1.950,weight:74.724,glass:'(1,2) AIS Stronglas - 5MM DARK GREY TINTED TG',meshType:'(3,4) AIS-PET RESISTANCE MESH',mesh:'Yes',outerFrame:'112 /P62F004B1MEXQQA',handleType:'S1-Casement Espag Handle, S2-Casement Espag Handle, S3-Casement Espag Handle, S4-Casement Espag Handle',handleColor:'BLACK',handleHeight:'S1,S2 - 721(Cavity level)',lockingType:'Multi Point Lock, Multi Point Lock',bsLockType:'#Error',frictionStay:'Friction Stay 10", Hd Friction Stay 16"',mullion:'CMT FLYMESH MULLION 32MM X 75MM(PSLM003B1MEXQQB), CMT T MULLION 62MM X 70MM (P62TT01B1MEXQQC)',silicon:'ANTHRACITE GREY',sash:'75 /P62SC02B1MEQQA, P62SC03B1MEXQQC',fittingsSupplier:'AIS HW',qty:1,rate:62383,amount:62383,remarks:'',_pageNo:6,_pagePos:1,_conf:95},
+  {slNo:7,designName:'TOP HUNG CUM LOUVERS',windowType:'Louvre',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:650,height:2250,areaSqft:15.75,area:1.463,weight:53.765,glass:'(1) AIS Stronglas - 5MM FROSTED TG (2) AIS LAM - 4MM CTG + 1.52MM MILKY PVB + 4MM CTG',meshType:'(0) PULL DOWN MESH -CUSTOM COLOR',mesh:'Yes',outerFrame:'62 /PC62-UF-01',casementSash:'75 /PC62-US-01',handleType:'S1-Casement Espag Handle',handleColor:'WHITE',handleHeight:'S1 - 0(Cavity level)',lockingType:'Multi Point Lock',frictionStay:'Hd Friction Stay 16"',coupler:'COUPLING SMALL',silicon:'WHITE',fittingsSupplier:'AIS HW',qty:1,rate:27334,amount:27334,remarks:'6 INCH EXHAUST CUT AT MIDDLE CENTER',_pageNo:7,_pagePos:0,_conf:95},
+  {slNo:8,designName:'FIXED ARCH CUM FRENCH WINDOW',windowType:'Arch Window',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO 62MM CASEMENT SERIES',width:1300,height:1500,areaSqft:19.10,area:1.774,weight:59.598,glass:'(1,2,3) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',outerFrame:'62 /PC62-UF-01',casementSash:'75 /PC62-US-02',handleType:'S1-Casement Espag Handle',handleColor:'WHITE',handleHeight:'S1 - 470(Cavity level)',lockingType:'Multi Point Lock',frictionStay:'Hd Friction Stay 16"',coupler:'COUPLING SMALL',silicon:'WHITE',fittingsSupplier:'AIS HW',qty:1,rate:28245,amount:28245,remarks:'',_pageNo:7,_pagePos:1,_conf:95},
+  {slNo:9,designName:'SLIDE AND FOLD',windowType:'Slide & Fold',profileMaterial:'uPVC',profileType:'uPVC',profileColor:'WHITE (RAL 9016)',series:'AIS ECO INVENTA SLIDE & FOLD',width:3000,height:2250,areaSqft:72.66,area:6.750,weight:172.26,glass:'(1,2,3,4) AIS Stronglas - 6MM Clear Toughned',meshType:'No',mesh:'No',outerFrame:'PAM119, 62 /PC62-UF-02',handleType:'S1-Fold & Slide Lockable Handle, S4-Fold & Slide Flat Handle',handleColor:'WHITE',handleHeight:'S1,S4 - 1012(Cavity level)',hinge:'Fold & Slide Frame Hinge, Fold & Slide Hinge Packer, Fold & Slide Hinge Packer Pin, Fold & Slide Sash Hinge Inward, Fold & Slide Sash Hinge Outward',cylinder:'Cylinder',silicon:'WHITE',sash:'102 /PC62-US-03, 102 /PC62-US-04',fittingsSupplier:'AIS HW',qty:1,rate:231363,amount:231363,remarks:'',_pageNo:8,_pagePos:0,_conf:95},
 ];
 
-/* ═══════════════════════════════
-   UTILITIES
-═══════════════════════════════ */
+/* ═══ UTILITIES ══════════════════════════════════════ */
 function g(id){return document.getElementById(id);}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function show(id){g(id).classList.add('show');}
-
-// money string "39,748" or "2,31,363" → number
 function normMoney(s){return parseFloat(String(s||0).replace(/[,₹\s]/g,''))||0;}
-
-// dimension: ensure positive integer mm
 function normDim(v){const n=parseFloat(v);return(n>0&&n<30000)?Math.round(n):0;}
-
-// normalize mesh field
-function normMesh(raw){
-  if(!raw)return'No';
-  return /^\s*no\s*$|^\s*none\s*$|^\s*n\/a\s*$/i.test(raw.trim())?'No':'Yes';
-}
-
-// normalize profile material
-function normMaterial(s){
-  if(!s)return'';
-  return/alumin/i.test(s)?'Aluminium':/upvc|pvc/i.test(s)?'uPVC':'';
-}
-
-// clean line: remove leading/trailing noise
+function normMesh(raw){if(!raw)return'No';return/^\s*no\s*$|^\s*none\s*$|^\s*n\/a\s*$/i.test(raw.trim())?'No':'Yes';}
+function normMaterial(s){if(!s)return'';return/alumin/i.test(s)?'Aluminium':/upvc|pvc/i.test(s)?'uPVC':'';}
 function cleanLine(s){return s.replace(/\s+/g,' ').trim();}
-
-// detect money in string
-function extractMoney(s){
-  const all=[...s.matchAll(/\b(\d{1,3}(?:,\d{2,3})+)\b/g)];
-  return all.map(m=>normMoney(m[1]));
-}
-
-// safe numeric extraction from uncertain string
-function extractNumber(s,min,max){
-  const n=parseFloat(s);
-  if(!isNaN(n)&&n>=min&&n<=max)return n;
-  return null;
-}
-
-// unique toast guard
-function toast(msg,type=''){
-  const key=msg+type;
-  if(S.toastActive.has(key))return;
-  S.toastActive.add(key);
-  setTimeout(()=>S.toastActive.delete(key),3200);
-  const w=g('toastWrap'),t=document.createElement('div');
-  t.className='toast '+type;t.textContent=msg;w.appendChild(t);
-  setTimeout(()=>{t.style.cssText='opacity:0;transform:translateX(12px);transition:all .25s';setTimeout(()=>t.remove(),260);},2800);
-}
 
 let _sT;
 function setStatus(type,msg){
@@ -433,467 +405,546 @@ function setStatus(type,msg){
   g('statusMsg').textContent=msg;
   if(type!=='loading')_sT=setTimeout(()=>c.classList.remove('show'),6000);
 }
+function toast(msg,type=''){
+  const key=msg+type;if(S.toastActive.has(key))return;
+  S.toastActive.add(key);setTimeout(()=>S.toastActive.delete(key),3200);
+  const w=g('toastWrap'),t=document.createElement('div');
+  t.className='toast '+type;t.textContent=msg;w.appendChild(t);
+  setTimeout(()=>{t.style.cssText='opacity:0;transform:translateX(12px);transition:all .25s';setTimeout(()=>t.remove(),260);},2800);
+}
 
-/* ═══════════════════════════════
-   PDF EXTRACTION
-═══════════════════════════════ */
+/* ═══ PWA ════════════════════════════════════════════ */
+function _initPWA(){
+  try{
+    const icon=`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="80" fill="#0a0b15"/><rect x="56" y="56" width="400" height="400" rx="16" fill="none" stroke="#3d6af5" stroke-width="28"/><line x1="56" y1="256" x2="456" y2="256" stroke="#3d6af5" stroke-width="18"/><line x1="256" y1="56" x2="256" y2="456" stroke="#3d6af5" stroke-width="18"/><rect x="90" y="90" width="138" height="124" rx="4" fill="#3d6af5" opacity=".25"/><rect x="284" y="298" width="138" height="124" rx="4" fill="#3d6af5" opacity=".2"/></svg>')}`;
+    const mf={name:APP_NAME,short_name:'AIS Decoder',description:'Decode AIS Windows quotation PDFs instantly',start_url:'./',display:'standalone',orientation:'any',background_color:'#08090e',theme_color:'#3d6af5',icons:[{src:icon,sizes:'any',type:'image/svg+xml',purpose:'any maskable'}]};
+    const mBlob=new Blob([JSON.stringify(mf)],{type:'application/json'});
+    const ml=g('manifestLink');if(ml)ml.href=URL.createObjectURL(mBlob);
+  }catch(e){}
+  if('serviceWorker' in navigator){
+    const swCode=`'use strict';
+const V='ais-${APP_VERSION}';
+const SKIP=['cdnjs.cloudflare.com','fonts.googleapis.com','fonts.gstatic.com'];
+self.addEventListener('install',()=>self.skipWaiting());
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET')return;
+  const u=new URL(e.request.url);
+  if(SKIP.some(h=>u.hostname.includes(h)))return;
+  if(u.pathname.endsWith('.pdf'))return;
+  e.respondWith(caches.open(V).then(c=>c.match(e.request).then(r=>r||fetch(e.request).then(r2=>{try{c.put(e.request,r2.clone());}catch(_){}return r2;}).catch(()=>r))));
+});
+self.addEventListener('message',e=>{if(e.data&&e.data.type==='SKIP_WAITING')self.skipWaiting();});`;
+    try{
+      const swBlob=new Blob([swCode],{type:'application/javascript'});
+      const swUrl=URL.createObjectURL(swBlob);
+      navigator.serviceWorker.register(swUrl).then(reg=>{
+        reg.addEventListener('updatefound',()=>{
+          const nw=reg.installing;
+          nw.addEventListener('statechange',()=>{if(nw.state==='installed'&&navigator.serviceWorker.controller)g('updateBar').classList.add('show');});
+        });
+        setInterval(()=>reg.update(),30*60*1000);
+      }).catch(()=>{});
+      navigator.serviceWorker.addEventListener('controllerchange',()=>{if(S._updating)window.location.reload();});
+    }catch(e){}
+  }
+  window.addEventListener('beforeinstallprompt',e=>{
+    e.preventDefault();window._pwaPrompt=e;
+    const b=g('installBtn');if(b)b.style.display='inline-flex';
+  });
+  window.addEventListener('appinstalled',()=>{
+    window._pwaPrompt=null;
+    const b=g('installBtn');if(b)b.style.display='none';
+    toast('App installed successfully! 🎉','ok');
+  });
+}
+async function installApp(){
+  if(window._pwaPrompt){
+    window._pwaPrompt.prompt();
+    const{outcome}=await window._pwaPrompt.userChoice;
+    if(outcome==='accepted'){window._pwaPrompt=null;const b=g('installBtn');if(b)b.style.display='none';}
+  }else{toast('Use browser menu → "Add to Home Screen" to install','');}
+}
+function applyUpdate(){
+  S._updating=true;
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistration().then(reg=>{
+      if(reg&&reg.waiting)reg.waiting.postMessage({type:'SKIP_WAITING'});
+      else window.location.reload();
+    }).catch(()=>window.location.reload());
+  }else window.location.reload();
+}
+
+/* ═══════════════════════════════════════════════════════
+   PDF EXTRACTION — COLUMN-AWARE
+   The AIS detail pages (4+) are a 3-column table:
+     Zone A "Sales Line"  (item heading, size, series, area/weight)
+     Zone B "Details"     (all key:value hardware/spec fields)
+     Zone C "Qty/Rate/Amount"
+   These three columns share overlapping Y-rows for a given item,
+   so a single Y-only line-grouping pass (used on page 3's summary
+   table) interleaves their text and corrupts field extraction.
+   Each text item is classified by X-position into its column BEFORE
+   line-grouping, then each column is grouped into lines independently.
+   A 4th "global" stream (old Y-only behaviour) is kept for the page-3
+   summary table and the page-level Design Remark table, which are
+   simple single-column-per-row layouts that already work correctly.
+═══════════════════════════════════════════════════════ */
 async function extractPDF(file){
-  if(typeof pdfjsLib==='undefined')throw new Error('PDF.js not loaded. Check your internet connection.');
+  if(typeof pdfjsLib==='undefined')throw new Error('PDF.js not loaded.');
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
   S.pdfDoc=pdf;
-  let full='';
+
+  let globalFull='';
+  const zoneA=[],zoneB=[],zoneC=[]; // each: {page, text}
+
+  const groupByY=(arr)=>{
+    const sorted=arr.slice().sort((a,b)=>{
+      const dy=Math.round(b.y/3)-Math.round(a.y/3);
+      return dy!==0?dy:a.x-b.x;
+    });
+    const out=[];let ly=null,buf='';
+    for(const it of sorted){
+      const yk=Math.round(it.y/3);
+      if(ly!==null&&Math.abs(yk-ly)>1){if(buf.trim())out.push(buf.trim());buf='';}
+      buf+=it.str+' ';ly=yk;
+    }
+    if(buf.trim())out.push(buf.trim());
+    return out;
+  };
+
   for(let p=1;p<=pdf.numPages;p++){
     const page=await pdf.getPage(p);
     const content=await page.getTextContent();
-    // Sort items: descending Y (top→bottom), then ascending X (left→right)
-    const its=content.items.slice().sort((a,b)=>{
-      const dy=Math.round(b.transform[5]/3)-Math.round(a.transform[5]/3);
-      return dy!==0?dy:a.transform[4]-b.transform[4];
-    });
-    // Group into logical lines by Y proximity
-    const lines=[];let lY=null,lT='';
-    for(const it of its){
-      const y=Math.round(it.transform[5]/3);
-      if(lY!==null&&Math.abs(y-lY)>1){if(lT.trim())lines.push(lT.trim());lT='';}
-      lT+=(it.str||'')+' ';lY=y;
+    const raw=content.items.map(it=>({str:it.str||'',x:it.transform[4],y:it.transform[5]})).filter(it=>it.str.trim());
+
+    // ---- global stream (page 3 summary, design remarks) ----
+    groupByY(raw).forEach(t=>{globalFull+=t+'\n';});
+    globalFull+=`[PAGE:${p}]\n`;
+
+    // ---- column-zone streams (detail item pages) ----
+    // BOUNDARY DETECTION: We look for the column HEADER text positions.
+    // The AIS detail pages have headers: "Sl.No" | "Sales Line" | "Details" | "Qty" | "Rate" | "Amount"
+    // Critical insight from diagnostic: the Details KEY LABELS (Design Name, Infill, etc.)
+    // start at x≈265-270 — LOWER than the "Details" header text (x=305).
+    // Setting bX = "Details".x - 2 (=303) is WRONG — it puts those labels into Zone A.
+    // CORRECT bX = midpoint between "Sales Line" center and "Details" center,
+    // which puts the boundary at ≈201 and captures ALL Details column content in Zone B.
+    let salesLineX=null,detailsX=null,qtyX=null;
+    for(const it of raw){
+      const s=it.str.trim().toLowerCase().replace(/\s+/g,' ');
+      if(salesLineX===null&&(s==='sales line'||s==='salesline'))salesLineX=it.x;
+      if(detailsX===null&&(s==='details'||s.startsWith('detail')))detailsX=it.x;
+      if(qtyX===null&&(s==='qty'||s.startsWith('qty ')))qtyX=it.x;
     }
-    if(lT.trim())lines.push(lT.trim());
-    full+=lines.join('\n')+`\n[PAGE:${p}]\n`;
+
+    let bX,cX;
+    if(salesLineX!==null&&detailsX!==null){
+      bX=(salesLineX+detailsX)/2; // midpoint ≈201 with this PDF
+    }else if(detailsX!==null){
+      bX=detailsX*0.80; // rough fallback if only "Details" found
+    }else{
+      bX=raw.length?Math.max(...raw.map(it=>it.x),1)*0.35:195;
+    }
+    if(qtyX!==null){
+      cX=qtyX-3;
+    }else if(detailsX!==null){
+      const pageW=Math.max(...raw.map(it=>it.x),1);
+      cX=pageW*0.80;
+    }else{
+      cX=raw.length?Math.max(...raw.map(it=>it.x),1)*0.78:445;
+    }
+
+    if(p===4){
+      console.log('[AIS] Page 4 boundaries: salesLineX='+salesLineX+' detailsX='+detailsX+' qtyX='+qtyX);
+      console.log('[AIS] Final bX='+bX.toFixed(1)+' cX='+cX.toFixed(1));
+      // Show sample fragments from each zone
+      const zAsamples=raw.filter(it=>it.x<bX).slice(0,5).map(it=>`x=${Math.round(it.x)} "${it.str}"`);
+      const zBsamples=raw.filter(it=>it.x>=bX&&it.x<cX).slice(0,8).map(it=>`x=${Math.round(it.x)} "${it.str}"`);
+      const zCsamples=raw.filter(it=>it.x>=cX).slice(0,5).map(it=>`x=${Math.round(it.x)} "${it.str}"`);
+      console.log('[AIS] Zone A samples:',zAsamples);
+      console.log('[AIS] Zone B samples:',zBsamples);
+      console.log('[AIS] Zone C samples:',zCsamples);
+    }
+
+    const a=raw.filter(it=>it.x<bX);
+    const b=raw.filter(it=>it.x>=bX&&it.x<cX);
+    const c=raw.filter(it=>it.x>=cX);
+    groupByY(a).forEach(t=>zoneA.push({page:p,text:t}));
+    groupByY(b).forEach(t=>zoneB.push({page:p,text:t}));
+    groupByY(c).forEach(t=>zoneC.push({page:p,text:t}));
   }
-  return full;
+  return{globalFull,zoneA,zoneB,zoneC};
 }
 
-/* ═══════════════════════════════
-   PARSER — ENTRY POINT
-═══════════════════════════════ */
-function parseQuotation(rawText){
-  const lines=rawText.split('\n').map(cleanLine).filter(l=>l.length>0);
-  let sumRows=[],detItems=[];
-  try{sumRows=parseSummaryRows(lines);}catch(e){console.warn('Summary parse error:',e);}
-  try{detItems=parseDetailItems(lines);}catch(e){console.warn('Detail parse error:',e);}
-  const merged=mergeAll(sumRows,detItems);
-  merged.forEach(it=>{try{finalizeItem(it);}catch(e){console.warn('Finalize error on item',it.slNo,e);}});
+/* ═══ PARSER ══════════════════════════════════════════ */
+const _NOISE_RE=/^opportunity (?:no|code)\.?|^quote (?:no|code|date)\.?|^salesperson\b|^responsible\b|^aisgs-|^\d{2}-\d{2}-\d{4}\b|^sl\.?\s*no\b|^sales line\b|^details\s*$|^qty\b.*rate|^\(inr\)|^view from inside$|^\d+\s+of\s+\d+$|^amount\s*$|^kg\.?$/i;
+// Terminator: marks the end of all item content for a zone (totals/footer/remarks/T&C)
+const _TERM_RE=/^total area\s*:|^total windows\s*:|^total weight\s*:|^payment terms\b|^basic value\b|^installation labour\b|^loading and unloading\b|^total taxable\b|^igst\b|^grand total\b|^design remark\b|^terms and conditions\b/i;
+
+function parseQuotation(extracted){
+  const {globalFull,zoneA,zoneB,zoneC}=extracted;
+  const lines=globalFull.split('\n').map(cleanLine).filter(l=>l.length>0);
+  let sum=[];
+  try{sum=parseSummaryRows(lines);}catch(e){console.warn('Sum parse:',e);}
+
+  let det=[];
+  try{det=buildDetailItems(zoneA,zoneB,zoneC);}catch(e){console.warn('Detail parse:',e);}
+  // Safety net: if the column-zone approach yields nothing (unexpected layout),
+  // fall back to a best-effort flat scan of the global stream so partial data
+  // still surfaces instead of an empty result.
+  if(!det.length){
+    try{det=fallbackFlatDetailParse(lines);}catch(e){console.warn('Fallback parse:',e);}
+  }
+
+  const merged=mergeAll(sum,det);
+  try{
+    const names=merged.map(i=>i.designName).filter(Boolean);
+    const remarkMap=parseDesignRemarks(lines,names);
+    merged.forEach(it=>{
+      const key=(it.designName||'').toUpperCase();
+      if(remarkMap[key]&&!it.remarks)it.remarks=remarkMap[key];
+    });
+  }catch(e){console.warn('Remark parse:',e);}
+  merged.forEach(it=>{try{finalizeItem(it);}catch(e){console.warn('Finalize:',e);}});
   return merged.filter(i=>i.designName||(i.width>0&&i.height>0));
 }
 
-/* ═══════════════════════════════
-   PARSER — SUMMARY TABLE (Page 3)
-═══════════════════════════════ */
-function parseSummaryRows(lines){
-  const rows=[];
-  let active=false,buf=[],slNo=0;
-
-  const flushBuf=()=>{
-    if(buf.length&&slNo>0){
-      const r=_buildSumRow(buf.join(' ').replace(/\s+/g,' ').trim(),slNo);
-      if(r)rows.push(r);
-    }
-    buf=[];slNo=0;
-  };
-
-  for(const t of lines){
-    if(/price and quantity summary/i.test(t)){active=true;continue;}
-    if(!active)continue;
-    if(/^(?:sales line details|total qty\b|total area\b|basic value\b|grand total\b)/i.test(t)){flushBuf();break;}
-    // skip column headers
-    if(/^(?:sl\.?\s*$|no\.?\s*$|design ref$|product$|location$|width$|height$|qty$|mesh$|glass$|rate\s*\(|amount\s*\()/i.test(t))continue;
-    // New row trigger: starts with 1-2 digit number + space + uppercase letter
-    const rs=t.match(/^(\d{1,2})\s+[A-Z3]/);
-    if(rs){
-      const n=parseInt(rs[1]);
-      if(n>=1&&n<=200){flushBuf();slNo=n;buf=[t];continue;}
-    }
-    if(buf.length>0)buf.push(t);
-  }
-  flushBuf();
-  return rows;
-}
-
-function _buildSumRow(full,slNo){
-  try{
-    // Profile material: uPVC or Aluminium column
-    const pmM=full.match(/\b(uPVC|Aluminium)\b/i);
-    const pm=pmM?normMaterial(pmM[1]):'';
-
-    // Design ref: text between slNo token and product material token
-    let designRef='';
-    if(pmM){
-      const raw=full.substring(String(slNo).length+1,full.indexOf(pmM[0])).trim();
-      // only keep uppercase alphanumeric — strip lowercase contamination from wrapped cells
-      const m=raw.match(/^([A-Z0-9][A-Z0-9\s&\-\/3T+]+)/);
-      designRef=m?m[1].trim():raw.trim();
-    }
-
-    // Text after profile material column
-    const afterPM=pmM?full.substring(full.indexOf(pmM[0])+pmM[0].length).trim():full;
-
-    // Mesh column: first Yes/No
-    const meshM=afterPM.match(/\b(Yes|No)\b/i);
-    const mesh=meshM?(meshM[1][0].toUpperCase()+meshM[1].slice(1).toLowerCase()):'No';
-
-    // Pre-mesh text: contains location(optional), Width, Height, Qty
-    const preMesh=meshM?afterPM.substring(0,afterPM.search(/\b(?:Yes|No)\b/i)):afterPM;
-    // Dimensions: 3-4 digit numbers in valid range
-    const dims=(preMesh.match(/\b(\d{3,4})\b/g)||[]).map(Number).filter(n=>n>=100&&n<=9999);
-    const width=dims[0]||0, height=dims[1]||0;
-    // Qty: 1-2 digit number
-    const qM=preMesh.match(/\b(\d{1,2})\b/);
-    const qty=qM?parseInt(qM[1]):1;
-
-    // Money values: use match indices for clean glass extraction
-    const moneyRe=/\b(\d{1,3}(?:,\d{2,3})+)\b/g;
-    const allM=[...full.matchAll(moneyRe)];
-    let rate=0,amount=0,glass='';
-    if(allM.length>=2){
-      const rM=allM[allM.length-2],aM=allM[allM.length-1];
-      rate=normMoney(rM[1]);amount=normMoney(aM[1]);
-      // Glass = text between mesh column end and rate start + text after amount end
-      const meshEnd=meshM?(full.search(/\b(?:Yes|No)\b/i)+meshM[1].length):0;
-      const g1=full.substring(meshEnd,rM.index).trim();
-      const g2=full.substring(aM.index+aM[0].length).trim();
-      glass=cleanLine(g1+' '+g2);
-    }else if(allM.length===1){
-      rate=amount=normMoney(allM[0][1]);
-      const meshEnd=meshM?(full.search(/\b(?:Yes|No)\b/i)+meshM[1].length):0;
-      glass=cleanLine(full.substring(meshEnd,allM[0].index));
-    }
-
-    // Confidence: how many fields we found
-    const conf=_sumConf({designRef,pm,width,height,rate,amount,glass});
-
-    return{slNo,designRef,designName:designRef,profileMaterial:pm,
-           width:normDim(width),height:normDim(height),qty,mesh,glass,
-           rate,amount,_conf:conf,_src:'sum'};
-  }catch(e){
-    console.warn('_buildSumRow failed for slNo',slNo,e);
-    return null;
-  }
-}
-
-function _sumConf(f){
-  let s=0;
-  if(f.designRef&&f.designRef.length>2)s+=20;
-  if(f.pm)s+=15;
-  if(f.width>0)s+=15;
-  if(f.height>0)s+=15;
-  if(f.rate>0)s+=20;
-  if(f.glass&&f.glass.length>3)s+=15;
-  return Math.min(s,100);
-}
-
-/* ═══════════════════════════════
-   PARSER — DETAIL SECTIONS (Pages 4+)
-═══════════════════════════════ */
-function parseDetailItems(lines){
-  const items=[];
-  let cur=null,infillBuf='',infillOn=false;
-  let curPage=1;
-  const pageItemCount={};
-
-  const flushItem=()=>{
-    if(!cur)return;
-    if(infillOn&&infillBuf.trim())cur.infill=infillBuf.trim();
-    // compute confidence
-    cur._conf=_detConf(cur);
-    cur._src='det';
-    items.push(cur);
-    cur=null;infillBuf='';infillOn=false;
-  };
-
-  for(let i=0;i<lines.length;i++){
-    const t=lines[i];
-    if(!t)continue;
-
-    // Page marker
-    const pgM=t.match(/^\[PAGE:(\d+)\]$/);
-    if(pgM){curPage=parseInt(pgM[1]);continue;}
-
-    // Stop at T&C
-    if(/^(?:terms and conditions|cancellation policy|delivery terms|payment terms|warranty|bank details|force majeure|exclusions)/i.test(t)){flushItem();break;}
-
-    // Skip noise lines
-    if(_isNoise(t))continue;
-
-    // ── New item: "N. DESIGN NAME [optional: qty rate amt]"
-    const itemM=t.match(/^(\d{1,3})\.\s+([A-Z0-9][A-Z0-9\s&\/\-\+3T]+?)(?:\s+(\d{1,2})\s+([\d,]+)\s+([\d,]+))?\s*$/);
-    if(itemM&&itemM[2].trim().length>1&&/[A-Z]/.test(itemM[2])){
-      flushItem();
-      const pos=pageItemCount[curPage]||0;
-      pageItemCount[curPage]=pos+1;
-      cur={slNo:parseInt(itemM[1]),designName:itemM[2].trim(),_pageNo:curPage,_pagePos:pos};
-      if(itemM[3]){
-        cur.qty=parseInt(itemM[3]);
-        cur.rate=normMoney(itemM[4]);
-        cur.amount=normMoney(itemM[5]);
-      }
+/* ── Zone A: item headers + Size + Series + Area/Weight ── */
+function parseZoneA(zoneA){
+  const items=[];let cur=null;
+  for(const{page,text:t}of zoneA){
+    if(_TERM_RE.test(t))break;
+    if(_NOISE_RE.test(t))continue;
+    const m=t.match(/^(\d{1,3})\.\s+(.+)$/);
+    if(m){
+      if(cur)items.push(cur);
+      cur={slNo:parseInt(m[1]),designName:m[2].trim(),_pageNo:page};
       continue;
     }
     if(!cur)continue;
-
-    // ── Size line: "Size : W = 750.00; H = 1500.00"
-    const szM=t.match(/Size\s*:\s*W\s*[=:]?\s*(\d+\.?\d*)\s*[;,]?\s*H\s*[=:]?\s*(\d+\.?\d*)/i)
-            ||t.match(/W\s*=\s*(\d+\.?\d*).*?H\s*=\s*(\d+\.?\d*)/i);
-    if(szM&&!cur.width){cur.width=normDim(szM[1]);cur.height=normDim(szM[2]);continue;}
-
-    // ── Area + Weight: "Area : 12.11 Sqft. Weight: 45.854 Kg"
-    const awM=t.match(/Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft\.?\s+Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
-    if(awM){
-      cur.areaSqft=parseFloat(awM[1]);
-      cur.area=+(parseFloat(awM[1])*0.0929).toFixed(3);
-      cur.weight=parseFloat(awM[2]);continue;
-    }
-    // area only
-    const arM=t.match(/^Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft/i);
-    if(arM&&!cur.area){cur.areaSqft=parseFloat(arM[1]);cur.area=+(parseFloat(arM[1])*0.0929).toFixed(3);continue;}
-    // weight only
-    const wtM=t.match(/^Weight\s*:\s*(\d+\.?\d*)\s*Kg/i);
-    if(wtM&&!cur.weight){cur.weight=parseFloat(wtM[1]);continue;}
-
-    // ── Series line (not a kv pair)
-    if(!cur.series&&_isSeriesLine(t)){cur.series=t;continue;}
-
-    // ── Qty Rate Amount: "1 39,748 39,748"
-    if(cur.qty==null){
-      const qraM=t.match(/^(\d{1,2})\s+([\d,]+)\s+([\d,]+)\s*$/);
-      if(qraM){
-        cur.qty=parseInt(qraM[1]);
-        cur.rate=normMoney(qraM[2]);
-        cur.amount=normMoney(qraM[3]);
-        continue;
-      }
-    }
-
-    // ── Infill continuation
-    if(infillOn){
-      // If next key:value starts, stop collecting infill
-      if(/^[A-Za-z][A-Za-z\s\/]{1,35}\s*:/.test(t)&&!/^\s*\(/.test(t)){
-        cur.infill=infillBuf.trim();infillOn=false;infillBuf='';
-        // fall through to parse as kv below
-      }else{infillBuf+=' '+t;continue;}
-    }
-
-    // ── Key : Value
-    const kv=t.match(/^([^:]{1,50}?)\s*:\s*(.+)$/);
-    if(kv){
-      const k=kv[1].trim(),v=kv[2].trim();
-      _applyKV(cur,k,v,()=>{infillBuf=v;infillOn=true;});
-    }
+    const szM=t.match(/Size\s*:\s*W\s*=?\s*(\d+\.?\d*)\s*[;,]?\s*H\s*=?\s*(\d+\.?\d*)/i);
+    if(szM){cur.width=normDim(szM[1]);cur.height=normDim(szM[2]);continue;}
+    const awM=t.match(/Area\s*:\s*(\d+\.?\d*)\s*Sq\.?ft\.?\s+Weight\s*:\s*(\d+\.?\d*)/i);
+    if(awM){cur.areaSqft=parseFloat(awM[1]);cur.area=+(parseFloat(awM[1])*0.0929).toFixed(3);cur.weight=parseFloat(awM[2]);continue;}
+    const isSeries=_isSeriesLine(t);
+    if(cur.series==null&&isSeries){cur.series=t;continue;}
+    if(cur.series!=null&&cur.area==null){cur.series+=' '+t;continue;}
   }
-  flushItem();
+  if(cur)items.push(cur);
   return items;
 }
 
-function _isNoise(t){
-  return /^view from inside$|^\d+\s+of\s+\d+$|^aisgs-|^opportunity no\b|^responsible$|^salesperson$|^quote no\b|^quote date$/i.test(t)
-      ||/^sl\.?\s*no\s+sales|^sales\s+line\s+details$|^amount\s*\(\s*inr|^rate\s*\(\s*inr|^qty$/i.test(t);
+/* ── Zone B: continuous key:value field stream, split into per-item
+     blocks at each "Design Name :" occurrence ── */
+const _FIELD_MAP={
+  'design name':'designName','design ref':'designRef','series':'series',
+  'profile type':'profileType','profile colour':'profileColor','profile color':'profileColor',
+  'glass type':'glassType','meshtype':'meshType','mesh type':'meshType',
+  'handle type':'handleType','flymesh handle':'flymeshHandle',
+  'handle colour':'handleColor','handle color':'handleColor','handle height':'handleHeight',
+  'locking type':'lockingType','b/s locking type':'bsLockType','bs locking type':'bsLockType',
+  'fittings supplier':'fittingsSupplier','silicon':'silicon','seal type':'sealType',
+  'cylinder':'cylinder','hinge':'hinge','friction stay':'frictionStay',
+  'coupler':'coupler','mullion':'mullion','track':'track','sliding sash':'slidingSash',
+  'casement sash':'casementSash','outer frame':'outerFrame','frame':'frame','sash':'sash',
+  'remarks':'remarks','width':'width','height':'height','area':'area','weight':'weight',
+};
+function parseZoneB(zoneB){
+  const blocks=[];
+  let cur=null,lastKey=null,infillBuf='',infillOn=false;
+  const flush=()=>{
+    if(cur){if(infillOn&&infillBuf.trim())cur.infill=infillBuf.trim();blocks.push(cur);}
+    cur=null;lastKey=null;infillBuf='';infillOn=false;
+  };
+  for(const{page,text:t}of zoneB){
+    if(_TERM_RE.test(t)){flush();break;}
+    if(_NOISE_RE.test(t))continue;
+    const kv=t.match(/^([^:]{1,55}?)\s*:\s*(.+)$/);
+    if(kv){
+      const k=kv[1].trim(),v=kv[2].trim();
+      const kl=k.toLowerCase().replace(/\s+/g,' ').trim();
+      if(kl==='design name'){flush();cur={designName:v,_pageNo:page};lastKey='designName';continue;}
+      if(!cur)continue;
+      if(infillOn){cur.infill=infillBuf.trim();infillOn=false;infillBuf='';}
+      if(kl==='infill'){infillBuf=v;infillOn=true;lastKey=null;continue;}
+      const im=kl.match(/^infill\s*([1-4])$/);
+      if(im){const f='infill'+im[1];cur[f]=v;lastKey=f;continue;}
+      if(kl in _FIELD_MAP){const f=_FIELD_MAP[kl];cur[f]=v;lastKey=f;continue;}
+      if(/\bri$/.test(kl)){lastKey=null;continue;} // RI reference codes — not shown in UI
+      lastKey=null;
+      continue;
+    }
+    if(!cur)continue;
+    if(infillOn){infillBuf+=' '+t;continue;}
+    if(lastKey&&typeof cur[lastKey]==='string'){cur[lastKey]=(cur[lastKey]+' '+t).trim();continue;}
+  }
+  flush();
+  return blocks;
+}
+
+/* ── Zone C: Qty/Rate/Amount triplets, one per item, in order ── */
+function parseZoneC(zoneC){
+  const triplets=[];
+  for(const{text:t}of zoneC){
+    if(_TERM_RE.test(t))break;
+    const m=t.match(/^(\d{1,3})\s+([\d,]+)\s+([\d,]+)\s*$/);
+    if(m)triplets.push({qty:parseInt(m[1]),rate:normMoney(m[2]),amount:normMoney(m[3])});
+  }
+  return triplets;
+}
+
+/* ── Zip the three zone sequences together by sequential order ── */
+function buildDetailItems(zoneA,zoneB,zoneC){
+  const a=parseZoneA(zoneA),b=parseZoneB(zoneB),c=parseZoneC(zoneC);
+  const n=Math.max(a.length,b.length,c.length);
+  const items=[];
+  const pageCounters={};
+  for(let i=0;i<n;i++){
+    const ai=a[i]||{},bi=b[i]||{},ci=c[i]||{};
+    const item=Object.assign({},bi,{
+      slNo:ai.slNo!=null?ai.slNo:(i+1),
+      designName:bi.designName||ai.designName||'',
+      width:bi.width||ai.width||0,
+      height:bi.height||ai.height||0,
+      series:bi.series||ai.series||'',
+      area:bi.area||ai.area||0,
+      areaSqft:bi.areaSqft||ai.areaSqft||0,
+      weight:bi.weight||ai.weight||0,
+      qty:ci.qty||1,
+      rate:ci.rate||0,
+      amount:ci.amount||0,
+      _pageNo:ai._pageNo||bi._pageNo||null,
+      _src:'det',
+      _conf:[bi.designName,bi.profileType,ci.rate,bi.infill||bi.infill1].filter(Boolean).length*20+20,
+    });
+    const pg=item._pageNo;
+    const pos=pageCounters[pg]||0;
+    item._pagePos=pos;
+    pageCounters[pg]=pos+1;
+    items.push(item);
+  }
+  return items;
+}
+
+/* ── Fallback: best-effort flat parse if zone-detection finds nothing ── */
+function fallbackFlatDetailParse(lines){
+  const items=[];let cur=null,infillBuf='',infillOn=false;
+  for(const t of lines){
+    if(_TERM_RE.test(t)){break;}
+    if(_NOISE_RE.test(t)||/^\[PAGE:\d+\]$/.test(t))continue;
+    const iM=t.match(/^(\d{1,3})\.\s+([A-Z0-9][A-Z0-9\s&\/\-\+3T]+?)\s*$/);
+    if(iM){if(cur)items.push(cur);cur={slNo:parseInt(iM[1]),designName:iM[2].trim(),_src:'det',_conf:40};continue;}
+    if(!cur)continue;
+    const kv=t.match(/^([^:]{1,55}?)\s*:\s*(.+)$/);
+    if(kv){
+      const k=kv[1].trim().toLowerCase(),v=kv[2].trim();
+      if(k==='infill'){infillBuf=v;infillOn=true;}
+      else if(infillOn){cur.infill=infillBuf.trim();infillOn=false;}
+      if(k in _FIELD_MAP)cur[_FIELD_MAP[k]]=v;
+    }
+  }
+  if(cur)items.push(cur);
+  return items;
+}
+
+/* ── Page 3 Summary table (unchanged — already validated extensively) ── */
+function parseSummaryRows(lines){
+  const rows=[];let active=false,buf=[],slNo=0;
+  const flush=()=>{
+    if(buf.length&&slNo>0){const r=_buildSumRow(buf.join(' ').replace(/\s+/g,' ').trim(),slNo);if(r)rows.push(r);}
+    buf=[];slNo=0;
+  };
+  for(const t of lines){
+    if(/price and quantity summary/i.test(t)){active=true;continue;}
+    if(!active)continue;
+    if(/^(?:sales line details|total qty\b|total area\b|basic value\b|grand total\b)/i.test(t)){flush();break;}
+    if(/^(?:sl\.?\s*$|no\.?\s*$|design ref$|product$|location$|width$|height$|qty$|mesh$|glass$|rate\s*\(|amount\s*\()/i.test(t))continue;
+    const rs=t.match(/^(\d{1,2})\s+[A-Z3]/);
+    if(rs){const n=parseInt(rs[1]);if(n>=1&&n<=200){flush();slNo=n;buf=[t];continue;}}
+    if(buf.length>0)buf.push(t);
+  }
+  flush();return rows;
+}
+function _buildSumRow(full,slNo){
+  try{
+    const pmM=full.match(/\b(uPVC|Aluminium)\b/i);
+    const pm=pmM?normMaterial(pmM[1]):'';
+    let designRef='';
+    if(pmM){
+      const raw=full.substring(String(slNo).length+1,full.indexOf(pmM[0])).trim();
+      const m=raw.match(/^([A-Z0-9][A-Z0-9\s&\-\/3T+]+)/);
+      designRef=m?m[1].trim():raw.trim();
+    }
+    const afterPM=pmM?full.substring(full.indexOf(pmM[0])+pmM[0].length).trim():full;
+    const meshM=afterPM.match(/\b(Yes|No)\b/i);
+    const mesh=meshM?(meshM[1][0].toUpperCase()+meshM[1].slice(1).toLowerCase()):'No';
+    const preMesh=meshM?afterPM.substring(0,afterPM.search(/\b(?:Yes|No)\b/i)):afterPM;
+    const dims=(preMesh.match(/\b(\d{3,4})\b/g)||[]).map(Number).filter(n=>n>=100&&n<=9999);
+    const qM=preMesh.match(/\b(\d{1,2})\b/);const qty=qM?parseInt(qM[1]):1;
+    const moneyRe=/\b(\d{1,3}(?:,\d{2,3})+)\b/g;
+    const allM=[...full.matchAll(moneyRe)];
+    let rate=0,amount=0,g1='',g2='';
+    if(allM.length>=2){
+      const rM=allM[allM.length-2],aM=allM[allM.length-1];
+      rate=normMoney(rM[1]);amount=normMoney(aM[1]);
+      const mEnd=meshM?(full.search(/\b(?:Yes|No)\b/i)+meshM[1].length):0;
+      g1=full.substring(mEnd,rM.index).trim();
+      g2=full.substring(aM.index+aM[0].length).trim();
+    }else if(allM.length===1){
+      rate=amount=normMoney(allM[0][1]);
+      const mEnd=meshM?(full.search(/\b(?:Yes|No)\b/i)+meshM[1].length):0;
+      g1=full.substring(mEnd,allM[0].index).trim();
+    }
+    const glass=cleanLine(g1+' '+g2);
+    if(!designRef&&!dims.length&&!rate)return null;
+    return{slNo,designRef,designName:designRef,profileMaterial:pm,width:normDim(dims[0]||0),height:normDim(dims[1]||0),qty,mesh,glass,rate,amount,_src:'sum'};
+  }catch(e){return null;}
 }
 
 function _isSeriesLine(t){
-  return /^(?:AIS|REGAL|ALN)\s+.+(?:SERIES|FOLD)\s*$/i.test(t)
+  return/^(?:AIS|REGAL|ALN)\s+.+(?:SERIES|FOLD)\s*$/i.test(t)
       ||/^AIS\s+(?:ECO|ECOPRIME|REGAL|INVENTA)/i.test(t)
-      ||/^REGAL\s+(?:SELECT|NEO)/i.test(t)
-      ||/^ALN\s*[-–]\s*\d+/i.test(t);
+      ||/^REGAL\s+(?:SELECT|NEO)/i.test(t)||/^ALN\s*[-–]\s*\d+/i.test(t);
 }
 
-function _applyKV(cur,k,v,startInfill){
-  const kl=k.toLowerCase();
-  if(/^infill$/i.test(k)){startInfill();}
-  else if(/^design name$/i.test(k))cur.designName=v;
-  else if(/^design ref$/i.test(k))cur.designRef=v;
-  else if(/^series$/i.test(k))cur.series=v;
-  else if(/^profile type$/i.test(k))cur.profileType=v;
-  else if(/^profile colou?r$/i.test(k))cur.profileColor=v;
-  else if(/^glass type$/i.test(k))cur.glassType=v;
-  else if(/^infill\s*([1-4])$/i.test(k)){const n=k.match(/\d/)[0];cur['infill'+n]=v;}
-  else if(/^meshtype$|^mesh\s+type$/i.test(k))cur.meshType=v;
-  else if(/^handle type$/i.test(k))cur.handleType=_cleanHandle(v);
-  else if(/^flymesh handle$/i.test(k))cur.flymeshHandle=v;
-  else if(/^handle colou?r$/i.test(k))cur.handleColor=v;
-  else if(/^locking type$/i.test(k))cur.lockingType=v;
-  else if(/^b\/s locking type$/i.test(k))cur.bsLockType=v;
-  else if(/^fittings supplier$/i.test(k))cur.fittingsSupplier=v;
-  else if(/^qty$|^quantity$/i.test(k))cur.qty=parseInt(v)||1;
-  else if(/rate.*inr|^rate$/i.test(k)&&!/amount/i.test(k))cur.rate=normMoney(v);
-  else if(/amount.*inr|^amount$/i.test(k))cur.amount=normMoney(v);
-  else if(/^area$/i.test(k))cur.area=parseFloat(v)||0;
-  else if(/^weight$/i.test(k))cur.weight=parseFloat(v)||0;
-  else if(/^remarks?$/i.test(k))cur.remarks=v;
-  else if(/^width$/i.test(k))cur.width=normDim(v);
-  else if(/^height$/i.test(k))cur.height=normDim(v);
-  else if(/^seal type$/i.test(k))cur.sealType=v;
-  // intentionally skipped: silicon, outer frame, track, hinge, cylinder, mullion,
-  // coupler, friction stay, handle height, casement/sliding sash, RI fields
-}
-
-function _cleanHandle(v){
-  // Remove S1-, S2- prefixes: "S1-Window Handle, S2-D Handle" → "Window Handle, D Handle"
-  return v.replace(/\bS\d+[-–]/g,'').replace(/,\s*S\d+[-–]/g,', ').trim();
-}
-
-function _detConf(cur){
-  let s=0;
-  if(cur.designName&&cur.designName.length>2)s+=20;
-  if(cur.profileType)s+=10;
-  if(cur.width>0)s+=15;
-  if(cur.height>0)s+=15;
-  if(cur.infill||cur.infill1)s+=15;
-  if(cur.rate>0)s+=15;
-  if(cur.meshType)s+=10;
-  return Math.min(s,100);
-}
-
-/* ═══════════════════════════════
-   MERGE
-   Detail = primary source of truth for specs.
-   Summary = primary for financials + fallback dimensions.
-═══════════════════════════════ */
-function mergeAll(sumRows,detItems){
-  // Build indexed maps
-  const sumByNo=new Map(sumRows.map(r=>[r.slNo,r]));
-  const detByNo=new Map(detItems.map(r=>[r.slNo,r]));
-
-  // Try name-based fallback merge when slNo doesn't match
-  if(sumRows.length&&detItems.length){
-    for(const d of detItems){
-      if(!sumByNo.has(d.slNo)){
-        const match=sumRows.find(s=>_nameMatch(s.designRef,d.designName));
-        if(match&&!detByNo.has(match.slNo)){
-          sumByNo.set(d.slNo,match);
-        }
+/* Design Remark table — appears once after all items, lists Design Ref + free
+   text remark per row. Matched back onto items by design name prefix match. */
+function parseDesignRemarks(lines,knownNames){
+  const map={};let inSection=false;
+  const names=(knownNames||[]).filter(Boolean)
+    .filter((v,i,a)=>a.indexOf(v)===i)
+    .sort((a,b)=>b.length-a.length);
+  for(const raw of lines){
+    const t=raw.trim();
+    if(/^design remark\b/i.test(t)){inSection=true;continue;}
+    if(!inSection)continue;
+    if(/^(?:terms and conditions|cancellation policy|payment terms|delivery terms|warranty|bank details|force majeure|exclusions)/i.test(t))break;
+    if(/^design ref\.?\s*$/i.test(t)||/^remarks?\s*$/i.test(t)||/^design ref\.?\s+remarks?$/i.test(t))continue;
+    if(!t)continue;
+    for(const name of names){
+      const upper=name.toUpperCase();
+      if(t.toUpperCase().startsWith(upper)){
+        const rem=t.substring(name.length).trim();
+        if(rem)map[upper]=(map[upper]?map[upper]+' ':'')+rem;
+        break;
       }
     }
   }
-
-  const allNos=new Set([...sumByNo.keys(),...detByNo.keys()]);
-  const result=[];
-
-  for(const n of [...allNos].sort((a,b)=>a-b)){
-    const s=sumByNo.get(n)||{};
-    const d=detByNo.get(n)||{};
-
-    // Glass: prefer detail infill (most complete), fall back to summary glass
-    const glass=_bestGlass(d,s);
-    const mesh=s.mesh||normMesh(d.meshType)||'No';
-
-    const item={
-      slNo:n,
-      designName:d.designName||s.designName||s.designRef||'',
-      designRef:d.designRef||s.designRef||d.designName||'',
-      windowType:'',// set by finalizeItem
-      series:d.series||'',
-      profileType:d.profileType||'',
-      profileColor:d.profileColor||'',
-      profileMaterial:d.profileMaterial||s.profileMaterial||normMaterial(d.profileType)||'',
-      width:d.width||s.width||0,
-      height:d.height||s.height||0,
-      area:d.area||0,
-      areaSqft:d.areaSqft||s.areaSqft||0,
-      weight:d.weight||0,
-      glass,
-      infill:d.infill||'',
-      infill1:d.infill1||'',
-      infill2:d.infill2||'',
-      infill3:d.infill3||'',
-      infill4:d.infill4||'',
-      glassType:d.glassType||'',
-      mesh,
-      meshType:d.meshType||'',
-      handleType:d.handleType||'',
-      flymeshHandle:d.flymeshHandle||'',
-      handleColor:d.handleColor||'',
-      lockingType:d.lockingType||'',
-      bsLockType:d.bsLockType||'',
-      fittingsSupplier:d.fittingsSupplier||'',
-      sealType:d.sealType||'',
-      qty:d.qty||s.qty||1,
-      rate:d.rate||s.rate||0,
-      amount:d.amount||s.amount||0,
-      remarks:d.remarks||'',
-      _pageNo:d._pageNo||null,
-      _pagePos:d._pagePos||0,
-      _conf:Math.round(((d._conf||0)+(s._conf||0))/2)||50,
-      _src:(d._src&&s._src)?'both':(d._src||s._src||'?'),
-    };
-    result.push(item);
-  }
-  return result;
+  return map;
 }
 
+/* ═══ MERGE ══════════════════════════════════════════ */
+function mergeAll(sumRows,detItems){
+  const sMap=new Map(sumRows.map(r=>[r.slNo,r]));
+  const dMap=new Map(detItems.map(r=>[r.slNo,r]));
+  for(const d of detItems){
+    if(!sMap.has(d.slNo)){
+      const m=sumRows.find(s=>_nameMatch(s.designRef,d.designName));
+      if(m&&!dMap.has(m.slNo))sMap.set(d.slNo,m);
+    }
+  }
+  const allNos=new Set([...sMap.keys(),...dMap.keys()]);
+  return[...allNos].sort((a,b)=>a-b).map(n=>{
+    const s=sMap.get(n)||{},d=dMap.get(n)||{};
+    return _mergeItem(s,d,n);
+  });
+}
 function _nameMatch(ref,name){
   if(!ref||!name)return false;
-  const a=ref.toLowerCase().replace(/\s+/g,'');
-  const b=name.toLowerCase().replace(/\s+/g,'');
+  const a=ref.toLowerCase().replace(/\s+/g,''),b=name.toLowerCase().replace(/\s+/g,'');
   return a===b||a.includes(b)||b.includes(a);
 }
-
-function _bestGlass(d,s){
-  // Collect all infill lines from detail
-  const parts=[d.infill,d.infill1,d.infill2,d.infill3,d.infill4].filter(Boolean);
-  if(parts.length)return parts.join(' + ');
-  if(d.glassType)return d.glassType;
-  if(s.glass&&s.glass.length>3)return s.glass;
-  return'';
+function _mergeItem(s,d,n){
+  const glass=[d.infill,d.infill1,d.infill2,d.infill3,d.infill4].filter(Boolean).join(' + ')||d.glassType||s.glass||'';
+  const mesh=s.mesh||normMesh(d.meshType)||'No';
+  return{
+    slNo:n,
+    designName:d.designName||s.designName||s.designRef||'',
+    designRef:d.designRef||s.designRef||d.designName||'',
+    windowType:'',
+    series:d.series||'',
+    profileType:d.profileType||'',
+    profileColor:d.profileColor||'',
+    profileMaterial:d.profileMaterial||s.profileMaterial||normMaterial(d.profileType)||'',
+    width:d.width||s.width||0,
+    height:d.height||s.height||0,
+    area:d.area||0,areaSqft:d.areaSqft||s.areaSqft||0,weight:d.weight||0,
+    glass,infill:d.infill||'',infill1:d.infill1||'',infill2:d.infill2||'',infill3:d.infill3||'',infill4:d.infill4||'',
+    glassType:d.glassType||'',
+    mesh,meshType:d.meshType||'',
+    handleType:d.handleType||'',
+    flymeshHandle:d.flymeshHandle||'',
+    handleColor:d.handleColor||'',
+    handleHeight:d.handleHeight||'',
+    lockingType:d.lockingType||'',
+    bsLockType:d.bsLockType||'',
+    fittingsSupplier:d.fittingsSupplier||'',
+    silicon:d.silicon||'',
+    sealType:d.sealType||'',
+    cylinder:d.cylinder||'',
+    hinge:d.hinge||'',
+    frictionStay:d.frictionStay||'',
+    coupler:d.coupler||'',
+    mullion:d.mullion||'',
+    track:d.track||'',
+    slidingSash:d.slidingSash||'',
+    casementSash:d.casementSash||'',
+    outerFrame:d.outerFrame||'',
+    frame:d.frame||'',
+    sash:d.sash||'',
+    qty:d.qty||s.qty||1,
+    rate:d.rate||s.rate||0,
+    amount:d.amount||s.amount||0,
+    remarks:d.remarks||'',
+    _pageNo:d._pageNo||null,_pagePos:d._pagePos||0,
+    _conf:Math.round(((d._conf||50)+(s._conf||50))/2),
+    _src:(d._src&&s._src)?'both':(d._src||s._src||'?'),
+  };
 }
 
-/* ═══════════════════════════════
-   NORMALIZATION — FINALIZE
-═══════════════════════════════ */
 function inferType(name){
   const n=(name||'').toLowerCase();
   if(/tilt.{0,6}turn/.test(n))return'Tilt & Turn';
   if(/slide.{0,6}fold|s\s*and\s*f\b|s\s*&\s*f\b/.test(n))return'Slide & Fold';
   if(/aln\s*\d+|regal.?neo/.test(n))return'Sliding Door';
   if(/slider.{0,4}door|sliding.{0,4}door/.test(n))return'Sliding Door';
-  if(/3t3s|twin.?sash.{0,6}slider|slider.{0,4}window|sliding.{0,4}window/.test(n))return'Sliding';
+  if(/3t3s|slider.{0,4}window|sliding.{0,4}window/.test(n))return'Sliding';
   if(/twin.?sash/.test(n))return'Twin Sash';
-  if(/casement.{0,10}french.{0,10}door|french.{0,6}door/.test(n))return'Casement Door';
-  if(/casement.{0,6}door/.test(n))return'Casement Door';
+  if(/casement.{0,10}door|french.{0,6}door/.test(n))return'Casement Door';
   if(/french.{0,6}window|casement/.test(n))return'Casement';
   if(/top.?hung|louver|louvre/.test(n))return'Louvre';
   if(/bay.{0,6}window/.test(n))return'Bay Window';
   if(/fixed.{0,6}arch|arch/.test(n))return'Arch Window';
   if(/^cw$|curtain.?wall/.test(n))return'Curtain Wall';
   if(/g2g|corner.{0,6}window/.test(n))return'Corner Window';
-  if(/fixed|picture|vision/.test(n))return'Fixed';
+  if(/fixed|picture/.test(n))return'Fixed';
   if(/door/.test(n))return'Door';
   return'Window';
 }
 
 function finalizeItem(it){
-  // Glass fallback chain
   if(!it.glass||it.glass.length<3){
     const p=[it.infill,it.infill1,it.infill2,it.infill3,it.infill4].filter(Boolean);
     it.glass=p.length?p.join(' + '):(it.glassType||'');
   }
-  // Mesh
-  it.mesh=/^yes$/i.test(it.mesh)?'Yes':normMesh(it.meshType);
-  // Area from dimensions if missing
+  if(!it.mesh||it.mesh==='No')it.mesh=normMesh(it.meshType);
+  it.mesh=/^yes$/i.test(it.mesh)?'Yes':'No';
   if((!it.area||it.area<0.001)&&it.width>0&&it.height>0)
     it.area=+((it.width*it.height)/1e6).toFixed(3);
-  // Window type
   if(!it.windowType)it.windowType=inferType(it.designName);
-  // Profile material from profile type if missing
-  if(!it.profileMaterial&&it.profileType)
-    it.profileMaterial=normMaterial(it.profileType);
+  if(!it.profileMaterial&&it.profileType)it.profileMaterial=normMaterial(it.profileType);
   it.profileMaterial=it.profileMaterial||'uPVC';
-  // Defaults
   it.qty=Math.max(1,parseInt(it.qty)||1);
-  it.rate=it.rate||0;
-  it.amount=it.amount||(it.qty*it.rate);
-  // Final confidence
-  if(!it._conf)it._conf=50;
+  it.rate=normMoney(it.rate);
+  it.amount=normMoney(it.amount)||(it.qty*it.rate);
 }
 
-/* ═══════════════════════════════
-   SVG SCHEMATICS
-═══════════════════════════════ */
+/* ═══ SVG SCHEMATICS ══════════════════════════════════ */
 function genSVG(item){
-  const wt=(item.windowType||'').toLowerCase();
-  const dn=(item.designName||'').toLowerCase();
-  const W=item.width||900,H=item.height||1200;
-  const mesh=item.mesh==='Yes';
-  const both=wt+' '+dn;
+  const wt=(item.windowType||'').toLowerCase(),dn=(item.designName||'').toLowerCase();
+  const W=item.width||900,H=item.height||1200,mesh=item.mesh==='Yes',both=wt+' '+dn;
   if(/tilt.{0,6}turn/.test(both))return _svgTiltTurn(W,H);
   if(/slide.{0,6}fold|s and f\b/.test(both))return _svgSlideFold(W,H);
   if(/sliding door|slider door|aln|regal.?neo/.test(both))return _svgSlidingDoor(W,H,mesh);
@@ -910,615 +961,336 @@ function genSVG(item){
   if(/door/.test(both))return _svgCasementDoor(W,H);
   return _svgFixed(W,H);
 }
-
-/* SVG helper: base wrapper */
-function _svgBase(W,H,drawFn,label){
-  const vW=300,vH=240;
-  const sc=Math.min(220/W,175/H);
-  const dW=Math.round(W*sc),dH=Math.round(H*sc);
-  const ox=Math.round((vW-dW)/2),oy=Math.round((vH-dH)/2+4);
-  return `<svg viewBox="0 0 ${vW} ${vH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:200px">
-<style>.sf{stroke:var(--accent,#3d6af5);fill:rgba(61,106,245,.10);stroke-width:2}
-.ss{stroke:var(--border-hi,#2e3158);fill:none;stroke-width:1}
-.sg{fill:rgba(61,106,245,.07);stroke:none}
-.so{stroke:var(--ok,#1fb86e);stroke-width:1;stroke-dasharray:4,2;fill:none}
-.sh{fill:var(--t1,#e8eaf0)}.sm{fill:rgba(31,184,110,.15)}
-.sl{fill:var(--t2,#8a90b0);font:9px 'Inter',sans-serif}
-.sa{fill:var(--accent,#3d6af5);font:bold 9px 'Inter',sans-serif}</style>
-${drawFn(ox,oy,dW,dH)}
+function _svgBase(W,H,fn,lbl){
+  const vW=300,vH=240,sc=Math.min(220/W,175/H),dW=Math.round(W*sc),dH=Math.round(H*sc),ox=Math.round((vW-dW)/2),oy=Math.round((vH-dH)/2+4);
+  return`<svg viewBox="0 0 ${vW} ${vH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:200px">
+<style>.sf{stroke:var(--accent,#3d6af5);fill:rgba(61,106,245,.10);stroke-width:2}.ss{stroke:var(--border-hi,#2e3158);fill:none;stroke-width:1}.sg{fill:rgba(61,106,245,.07)}.so{stroke:var(--ok,#1fb86e);stroke-width:1;stroke-dasharray:4,2;fill:none}.sh{fill:var(--t1,#e8eaf0)}.sm{fill:rgba(31,184,110,.15)}.sl{fill:var(--t2,#8a90b0);font:9px 'Inter',sans-serif}.sa{fill:var(--accent,#3d6af5);font:bold 9px 'Inter',sans-serif}</style>
+${fn(ox,oy,dW,dH)}
 <text class="sl" x="${vW/2}" y="${vH-3}" text-anchor="middle">${W}×${H}mm · Inside View</text>
-${label?`<text class="sa" x="${vW/2}" y="12" text-anchor="middle">${label}</text>`:''}
-</svg>`;
+${lbl?`<text class="sa" x="${vW/2}" y="12" text-anchor="middle">${lbl}</text>`:''}</svg>`;
 }
+function _svgFixed(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/><rect class="sg" x="${ox+5}" y="${oy+5}" width="${dW-10}" height="${dH-10}"/><line class="ss" x1="${ox+14}" y1="${oy+14}" x2="${ox+dW-14}" y2="${oy+dH-14}" opacity=".2"/><line class="ss" x1="${ox+dW-14}" y1="${oy+14}" x2="${ox+14}" y2="${oy+dH-14}" opacity=".2"/>`,'FIXED');}
+function _svgSliding(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{const p=dW>170?3:2,pw=dW/p;let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/><line class="ss" x1="${ox}" y1="${oy+5}" x2="${ox+dW}" y2="${oy+5}"/><line class="ss" x1="${ox}" y1="${oy+dH-5}" x2="${ox+dW}" y2="${oy+dH-5}"/>`;for(let i=0;i<p;i++){const px=ox+i*pw,sl=i%2===1;c+=`<rect class="ss" x="${px+2}" y="${oy+2}" width="${pw-4}" height="${dH-4}"/><rect class="${mesh&&sl?'sm':'sg'}" x="${px+5}" y="${oy+8}" width="${pw-10}" height="${dH-16}"/>`;if(sl)c+=`<circle class="sh" cx="${px+10}" cy="${oy+dH/2}" r="3"/><path class="so" d="M${px+pw*0.7},${oy+dH/2}L${px+16},${oy+dH/2}"/>`;}return c;},'SLIDING');}
+function _svgCasement(W,H,topFix,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{const p=dW>160?2:1,pw=dW/p;let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;if(topFix){const th=Math.round(dH*0.28),my=oy+th,mh=dH-th;c+=`<rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${th-4}"/><rect class="sg" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${th-10}"/><path class="so" d="M${ox+dW/2},${oy+th-6}L${ox+dW-10},${oy+10}"/>`;for(let i=0;i<p;i++){const px=ox+i*pw;c+=`<rect class="ss" x="${px+3}" y="${my+2}" width="${pw-6}" height="${mh-4}"/><rect class="${mesh?'sm':'sg'}" x="${px+6}" y="${my+5}" width="${pw-12}" height="${mh-10}"/><path class="so" d="M${px+8},${my+mh-8}L${px+pw-8},${my+8}"/><circle class="sh" cx="${px+pw-10}" cy="${my+mh/2}" r="3"/>`;}}else{for(let i=0;i<p;i++){const px=ox+i*pw,ol=i===0;c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-6}"/><rect class="${mesh?'sm':'sg'}" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-12}"/><path class="so" d="M${ol?px+8:px+pw-8},${oy+dH-8}L${ol?px+pw-8:px+8},${oy+8}"/><circle class="sh" cx="${ol?px+pw-10:px+10}" cy="${oy+dH/2}" r="3"/>`;}}return c;},'CASEMENT');}
+function _svgTiltTurn(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/><rect class="sg" x="${ox+5}" y="${oy+5}" width="${dW-10}" height="${dH-10}"/><path class="so" d="M${ox+8},${oy+dH-8}L${ox+dW-8},${oy+8}"/><path class="so" d="M${ox+dW/2},${oy+dH-8}L${ox+8},${oy+dH*0.42}M${ox+dW/2},${oy+dH-8}L${ox+dW-8},${oy+dH*0.42}"/><rect class="sh" x="${ox+dW/2-5}" y="${oy+dH-22}" width="10" height="14" rx="1"/><text class="sa" x="${ox+dW-4}" y="${oy+18}" text-anchor="end" font-size="8">T&amp;T</text>`,'TILT &amp; TURN');}
+function _svgBay(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{const pw=dW/3,ang=pw*0.14;return`<g stroke="var(--accent,#3d6af5)" stroke-width="2" fill="rgba(61,106,245,.10)"><polygon points="${ox+ang},${oy} ${ox+pw},${oy} ${ox+pw},${oy+dH} ${ox},${oy+dH}"/><rect x="${ox+pw}" y="${oy}" width="${pw}" height="${dH}"/><polygon points="${ox+2*pw},${oy} ${ox+dW-ang},${oy} ${ox+dW},${oy+dH} ${ox+2*pw},${oy+dH}"/></g><path class="so" d="M${ox+8},${oy+dH-8}L${ox+pw-6},${oy+8}"/><circle class="sh" cx="${ox+pw-8}" cy="${oy+dH/2}" r="3"/><path class="so" d="M${ox+2*pw+6},${oy+8}L${ox+dW-8},${oy+dH-8}"/><circle class="sh" cx="${ox+2*pw+8}" cy="${oy+dH/2}" r="3"/><line class="ss" x1="${ox+pw+8}" y1="${oy+12}" x2="${ox+2*pw-8}" y2="${oy+dH-12}" opacity=".25"/><line class="ss" x1="${ox+2*pw-8}" y1="${oy+12}" x2="${ox+pw+8}" y2="${oy+dH-12}" opacity=".25"/>`;},'BAY WINDOW');}
+function _svgArch(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{const ah=Math.round(dH*0.28),cx=ox+dW/2;return`<path class="sf" d="M${ox},${oy+ah} Q${ox},${oy} ${cx},${oy} Q${ox+dW},${oy} ${ox+dW},${oy+ah} L${ox+dW},${oy+dH} L${ox},${oy+dH} Z"/><path class="sg" d="M${ox+4},${oy+ah} Q${ox+4},${oy+4} ${cx},${oy+4} Q${ox+dW-4},${oy+4} ${ox+dW-4},${oy+ah} L${ox+dW-4},${oy+dH-4} L${ox+4},${oy+dH-4} Z"/><circle class="sh" cx="${cx}" cy="${oy+dH*0.55}" r="3"/>`;},'ARCH');}
+function _svgSlidingDoor(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{const p=dW>180?3:2,pw=dW/p;let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/><line class="ss" x1="${ox}" y1="${oy+5}" x2="${ox+dW}" y2="${oy+5}"/><rect x="${ox}" y="${oy+dH-5}" width="${dW}" height="5" style="fill:var(--accent,#3d6af5);opacity:.4"/>`;for(let i=0;i<p;i++){const px=ox+i*pw,sl=i===1;c+=`<rect class="ss" x="${px+2}" y="${oy+2}" width="${pw-4}" height="${dH-4}"/><rect class="${mesh&&sl?'sm':'sg'}" x="${px+5}" y="${oy+8}" width="${pw-10}" height="${dH-16}"/>`;if(sl)c+=`<rect class="sh" x="${px+8}" y="${oy+dH*0.42}" width="7" height="16" rx="2"/><path class="so" d="M${px+pw*0.7},${oy+dH*0.5}L${px+18},${oy+dH*0.5}"/>`;}return c;},'SLIDING DOOR');}
+function _svgCasementDoor(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{const p=dW>140?2:1,pw=dW/p;let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/><rect x="${ox}" y="${oy+dH-5}" width="${dW}" height="5" style="fill:var(--accent,#3d6af5);opacity:.5"/>`;for(let i=0;i<p;i++){const px=ox+i*pw,ol=i===0;c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-8}"/><rect class="sg" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-16}"/><path class="so" d="M${ol?px+8:px+pw-8},${oy+dH-12}L${ol?px+pw-8:px+8},${oy+8}"/><rect class="sh" x="${ol?px+pw-14:px+7}" y="${oy+dH*0.44}" width="7" height="18" rx="2"/>`;}return c;},'CASEMENT DOOR');}
+function _svgTwinSash(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{const hh=dH/2;return`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/><rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${hh-4}"/><rect class="${mesh?'sm':'sg'}" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${hh-10}"/><path class="so" d="M${ox+10},${oy+hh-8}L${ox+dW-10},${oy+10}"/><circle class="sh" cx="${ox+dW-12}" cy="${oy+hh/2}" r="3"/><rect class="ss" x="${ox+3}" y="${oy+hh+2}" width="${dW-6}" height="${hh-4}"/><rect class="${mesh?'sm':'sg'}" x="${ox+6}" y="${oy+hh+5}" width="${dW-12}" height="${hh-10}"/><path class="so" d="M${ox+10},${oy+hh+8}L${ox+dW-10},${oy+dH-10}"/><circle class="sh" cx="${ox+dW-12}" cy="${oy+hh*1.5}" r="3"/>`;},'TWIN SASH');}
+function _svgSlideFold(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{const p=4,pw=dW/p;let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;for(let i=0;i<p;i++){const px=ox+i*pw;c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-6}"/><rect class="sg" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-12}"/>`;if(i<p-1)c+=`<path class="so" d="M${px+pw-3},${oy+12}L${px+pw+3},${oy+12}M${px+pw-3},${oy+dH-12}L${px+pw+3},${oy+dH-12}"/>`;if(i%2===0)c+=`<rect class="sh" x="${px+pw-10}" y="${oy+dH/2-6}" width="6" height="12" rx="1"/>`;}return c;},'SLIDE &amp; FOLD');}
+function _svgLouvre(W,H,topHung){return _svgBase(W,H,(ox,oy,dW,dH)=>{let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;if(topHung){const th=Math.round(dH*0.3),lh=dH-th,sl=5,sh=lh/sl;c+=`<rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${th-4}"/><rect class="sg" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${th-10}"/><path class="so" d="M${ox+dW/2},${oy+th-6}L${ox+dW-10},${oy+10}"/>`;for(let i=0;i<sl;i++){const sy=oy+th+i*sh+sh*0.08;c+=`<rect class="sg" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.75}" rx="1"/><rect class="ss" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.75}" rx="1"/>`;}}else{const sl=6,sh=dH/sl;for(let i=0;i<sl;i++){const sy=oy+i*sh+sh*0.08;c+=`<rect class="sg" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.76}" rx="1"/><rect class="ss" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.76}" rx="1"/>`;}}return c;},'LOUVRE');}
+function _svgCorner(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{const hw=Math.round(dW*0.55),vw=dW-hw;return`<rect class="sf" x="${ox}" y="${oy}" width="${hw}" height="${dH}" rx="2"/><rect class="sg" x="${ox+4}" y="${oy+4}" width="${hw-8}" height="${dH-8}"/><rect class="sf" x="${ox+hw}" y="${oy}" width="${vw}" height="${dH}" rx="2"/><rect class="sg" x="${ox+hw+4}" y="${oy+4}" width="${vw-8}" height="${dH-8}"/><circle cx="${ox+hw}" cy="${oy+dH/2}" r="5" style="fill:var(--ok,#1fb86e);opacity:.8"/><text style="fill:var(--ok,#1fb86e);font:bold 8px 'Inter',sans-serif" x="${ox+hw}" y="${oy+dH/2+15}" text-anchor="middle">G2G</text>`;},'CORNER G2G');}
+function _svgCurtainWall(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{const cols=2,rows=3,pw=dW/cols,ph=dH/rows;let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;for(let r=0;r<rows;r++)for(let cl=0;cl<cols;cl++)c+=`<rect class="sg" x="${ox+cl*pw+4}" y="${oy+r*ph+4}" width="${pw-8}" height="${ph-8}" rx="1"/><rect class="ss" x="${ox+cl*pw+4}" y="${oy+r*ph+4}" width="${pw-8}" height="${ph-8}" rx="1"/>`;return c;},'CURTAIN WALL');}
 
-function _svgFixed(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>`
-<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>
-<rect class="sg" x="${ox+5}" y="${oy+5}" width="${dW-10}" height="${dH-10}"/>
-<line class="ss" x1="${ox+14}" y1="${oy+14}" x2="${ox+dW-14}" y2="${oy+dH-14}" opacity=".2"/>
-<line class="ss" x1="${ox+dW-14}" y1="${oy+14}" x2="${ox+14}" y2="${oy+dH-14}" opacity=".2"/>
-`,'FIXED');}
-
-function _svgSliding(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>170?3:2,pw=dW/p;let c='';
-c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-c+=`<line class="ss" x1="${ox}" y1="${oy+5}" x2="${ox+dW}" y2="${oy+5}"/>`;
-c+=`<line class="ss" x1="${ox}" y1="${oy+dH-5}" x2="${ox+dW}" y2="${oy+dH-5}"/>`;
-for(let i=0;i<p;i++){const px=ox+i*pw,sl=i%2===1;
-c+=`<rect class="ss" x="${px+2}" y="${oy+2}" width="${pw-4}" height="${dH-4}"/>`;
-c+=`<rect class="${mesh&&sl?'sm':'sg'}" x="${px+5}" y="${oy+8}" width="${pw-10}" height="${dH-16}"/>`;
-if(sl){c+=`<circle class="sh" cx="${px+10}" cy="${oy+dH/2}" r="3"/>`;
-c+=`<path class="so" d="M${px+pw*0.7},${oy+dH/2}L${px+16},${oy+dH/2}"/>`;}}
-return c;},'SLIDING');}
-
-function _svgCasement(W,H,topFix,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>160?2:1,pw=dW/p;let c='';
-c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-if(topFix){const th=Math.round(dH*0.28),my=oy+th,mh=dH-th;
-c+=`<rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${th-4}"/>`;
-c+=`<rect class="sg" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${th-10}"/>`;
-c+=`<path class="so" d="M${ox+dW/2},${oy+th-6}L${ox+dW-10},${oy+10}"/>`;
-for(let i=0;i<p;i++){const px=ox+i*pw;
-c+=`<rect class="ss" x="${px+3}" y="${my+2}" width="${pw-6}" height="${mh-4}"/>`;
-c+=`<rect class="${mesh?'sm':'sg'}" x="${px+6}" y="${my+5}" width="${pw-12}" height="${mh-10}"/>`;
-c+=`<path class="so" d="M${px+8},${my+mh-8}L${px+pw-8},${my+8}"/>`;
-c+=`<circle class="sh" cx="${px+pw-10}" cy="${my+mh/2}" r="3"/>`;}}
-else{for(let i=0;i<p;i++){const px=ox+i*pw,ol=i===0;
-c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-6}"/>`;
-c+=`<rect class="${mesh?'sm':'sg'}" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-12}"/>`;
-c+=`<path class="so" d="M${ol?px+8:px+pw-8},${oy+dH-8}L${ol?px+pw-8:px+8},${oy+8}"/>`;
-c+=`<circle class="sh" cx="${ol?px+pw-10:px+10}" cy="${oy+dH/2}" r="3"/>`;}}
-return c;},'CASEMENT');}
-
-function _svgTiltTurn(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>`
-<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>
-<rect class="sg" x="${ox+5}" y="${oy+5}" width="${dW-10}" height="${dH-10}"/>
-<path class="so" d="M${ox+8},${oy+dH-8}L${ox+dW-8},${oy+8}"/>
-<path class="so" d="M${ox+dW/2},${oy+dH-8}L${ox+8},${oy+dH*0.42}M${ox+dW/2},${oy+dH-8}L${ox+dW-8},${oy+dH*0.42}"/>
-<rect class="sh" x="${ox+dW/2-5}" y="${oy+dH-22}" width="10" height="14" rx="1"/>
-<text class="sa" x="${ox+dW-4}" y="${oy+18}" text-anchor="end" font-size="8">T&amp;T</text>
-`,'TILT &amp; TURN');}
-
-function _svgBay(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const pw=dW/3,ang=pw*0.14;
-return`<g stroke="var(--accent,#3d6af5)" stroke-width="2" fill="rgba(61,106,245,.10)">
-<polygon points="${ox+ang},${oy} ${ox+pw},${oy} ${ox+pw},${oy+dH} ${ox},${oy+dH}"/>
-<rect x="${ox+pw}" y="${oy}" width="${pw}" height="${dH}"/>
-<polygon points="${ox+2*pw},${oy} ${ox+dW-ang},${oy} ${ox+dW},${oy+dH} ${ox+2*pw},${oy+dH}"/>
-</g>
-<path class="so" d="M${ox+8},${oy+dH-8}L${ox+pw-6},${oy+8}"/>
-<circle class="sh" cx="${ox+pw-8}" cy="${oy+dH/2}" r="3"/>
-<path class="so" d="M${ox+2*pw+6},${oy+8}L${ox+dW-8},${oy+dH-8}"/>
-<circle class="sh" cx="${ox+2*pw+8}" cy="${oy+dH/2}" r="3"/>
-<line class="ss" x1="${ox+pw+8}" y1="${oy+12}" x2="${ox+2*pw-8}" y2="${oy+dH-12}" opacity=".25"/>
-<line class="ss" x1="${ox+2*pw-8}" y1="${oy+12}" x2="${ox+pw+8}" y2="${oy+dH-12}" opacity=".25"/>`;
-},'BAY WINDOW');}
-
-function _svgArch(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const ah=Math.round(dH*0.28),cx=ox+dW/2;
-return`<path class="sf" d="M${ox},${oy+ah} Q${ox},${oy} ${cx},${oy} Q${ox+dW},${oy} ${ox+dW},${oy+ah} L${ox+dW},${oy+dH} L${ox},${oy+dH} Z"/>
-<path class="sg" d="M${ox+4},${oy+ah} Q${ox+4},${oy+4} ${cx},${oy+4} Q${ox+dW-4},${oy+4} ${ox+dW-4},${oy+ah} L${ox+dW-4},${oy+dH-4} L${ox+4},${oy+dH-4} Z"/>
-<circle class="sh" cx="${cx}" cy="${oy+dH*0.55}" r="3"/>
-<path class="so" d="M${ox+10},${oy+dH-10}L${cx-4},${oy+ah+8}M${cx+4},${oy+ah+8}L${ox+dW-10},${oy+dH-10}"/>`;
-},'ARCH');}
-
-function _svgSlidingDoor(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>180?3:2,pw=dW/p;let c='';
-c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-c+=`<line class="ss" x1="${ox}" y1="${oy+5}" x2="${ox+dW}" y2="${oy+5}"/>`;
-c+=`<rect x="${ox}" y="${oy+dH-5}" width="${dW}" height="5" style="fill:var(--accent,#3d6af5);opacity:.4"/>`;
-for(let i=0;i<p;i++){const px=ox+i*pw,sl=i===1;
-c+=`<rect class="ss" x="${px+2}" y="${oy+2}" width="${pw-4}" height="${dH-4}"/>`;
-c+=`<rect class="${mesh&&sl?'sm':'sg'}" x="${px+5}" y="${oy+8}" width="${pw-10}" height="${dH-16}"/>`;
-if(sl){c+=`<rect class="sh" x="${px+8}" y="${oy+dH*0.42}" width="7" height="16" rx="2"/>`;
-c+=`<path class="so" d="M${px+pw*0.7},${oy+dH*0.5}L${px+18},${oy+dH*0.5}"/>`;}}
-return c;},'SLIDING DOOR');}
-
-function _svgCasementDoor(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=dW>140?2:1,pw=dW/p;let c='';
-c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-c+=`<rect x="${ox}" y="${oy+dH-5}" width="${dW}" height="5" style="fill:var(--accent,#3d6af5);opacity:.5"/>`;
-for(let i=0;i<p;i++){const px=ox+i*pw,ol=i===0;
-c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-8}"/>`;
-c+=`<rect class="sg" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-16}"/>`;
-c+=`<path class="so" d="M${ol?px+8:px+pw-8},${oy+dH-12}L${ol?px+pw-8:px+8},${oy+8}"/>`;
-c+=`<rect class="sh" x="${ol?px+pw-14:px+7}" y="${oy+dH*0.44}" width="7" height="18" rx="2"/>`;
-c+=`<circle class="sh" cx="${ol?px+pw-14+3:px+7+3}" cy="${oy+dH*0.44+18}" r="2"/>`;}
-return c;},'CASEMENT DOOR');}
-
-function _svgTwinSash(W,H,mesh){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const hh=dH/2;
-return`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>
-<rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${hh-4}"/>
-<rect class="${mesh?'sm':'sg'}" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${hh-10}"/>
-<path class="so" d="M${ox+10},${oy+hh-8}L${ox+dW-10},${oy+10}"/>
-<circle class="sh" cx="${ox+dW-12}" cy="${oy+hh/2}" r="3"/>
-<rect class="ss" x="${ox+3}" y="${oy+hh+2}" width="${dW-6}" height="${hh-4}"/>
-<rect class="${mesh?'sm':'sg'}" x="${ox+6}" y="${oy+hh+5}" width="${dW-12}" height="${hh-10}"/>
-<path class="so" d="M${ox+10},${oy+hh+8}L${ox+dW-10},${oy+dH-10}"/>
-<circle class="sh" cx="${ox+dW-12}" cy="${oy+hh*1.5}" r="3"/>`;
-},'TWIN SASH');}
-
-function _svgSlideFold(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const p=4,pw=dW/p;let c='';
-c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-for(let i=0;i<p;i++){const px=ox+i*pw;
-c+=`<rect class="ss" x="${px+3}" y="${oy+3}" width="${pw-6}" height="${dH-6}"/>`;
-c+=`<rect class="sg" x="${px+6}" y="${oy+6}" width="${pw-12}" height="${dH-12}"/>`;
-if(i<p-1)c+=`<path class="so" d="M${px+pw-3},${oy+12}L${px+pw+3},${oy+12}M${px+pw-3},${oy+dH-12}L${px+pw+3},${oy+dH-12}"/>`;
-if(i%2===0)c+=`<rect class="sh" x="${px+pw-10}" y="${oy+dH/2-6}" width="6" height="12" rx="1"/>`;}
-return c;},'SLIDE &amp; FOLD');}
-
-function _svgLouvre(W,H,topHung){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-let c=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-if(topHung){const th=Math.round(dH*0.3),lh=dH-th,sl=5,sh=lh/sl;
-c+=`<rect class="ss" x="${ox+3}" y="${oy+3}" width="${dW-6}" height="${th-4}"/>`;
-c+=`<rect class="sg" x="${ox+6}" y="${oy+6}" width="${dW-12}" height="${th-10}"/>`;
-c+=`<path class="so" d="M${ox+dW/2},${oy+th-6}L${ox+dW-10},${oy+10}"/>`;
-for(let i=0;i<sl;i++){const sy=oy+th+i*sh+sh*0.08;
-c+=`<rect class="sg" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.75}" rx="1"/>`;
-c+=`<rect class="ss" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.75}" rx="1"/>`;}}
-else{const sl=6,sh=dH/sl;
-for(let i=0;i<sl;i++){const sy=oy+i*sh+sh*0.08;
-c+=`<rect class="sg" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.76}" rx="1"/>`;
-c+=`<rect class="ss" x="${ox+4}" y="${sy}" width="${dW-8}" height="${sh*0.76}" rx="1"/>`;}}
-return c;},'LOUVRE');}
-
-function _svgCorner(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const hw=Math.round(dW*0.55),vw=dW-hw;
-return`<rect class="sf" x="${ox}" y="${oy}" width="${hw}" height="${dH}" rx="2"/>
-<rect class="sg" x="${ox+4}" y="${oy+4}" width="${hw-8}" height="${dH-8}"/>
-<rect class="sf" x="${ox+hw}" y="${oy}" width="${vw}" height="${dH}" rx="2"/>
-<rect class="sg" x="${ox+hw+4}" y="${oy+4}" width="${vw-8}" height="${dH-8}"/>
-<circle cx="${ox+hw}" cy="${oy+dH/2}" r="5" style="fill:var(--ok,#1fb86e);opacity:.8"/>
-<text style="fill:var(--ok,#1fb86e);font:bold 8px 'Inter',sans-serif" x="${ox+hw}" y="${oy+dH/2+15}" text-anchor="middle">G2G</text>`;
-},'CORNER G2G');}
-
-function _svgCurtainWall(W,H){return _svgBase(W,H,(ox,oy,dW,dH)=>{
-const cols=2,rows=3,pw=dW/cols,ph=dH/rows;let c='';
-c+=`<rect class="sf" x="${ox}" y="${oy}" width="${dW}" height="${dH}" rx="2"/>`;
-for(let r=0;r<rows;r++)for(let cl=0;cl<cols;cl++){
-c+=`<rect class="sg" x="${ox+cl*pw+4}" y="${oy+r*ph+4}" width="${pw-8}" height="${ph-8}" rx="1"/>`;
-c+=`<rect class="ss" x="${ox+cl*pw+4}" y="${oy+r*ph+4}" width="${pw-8}" height="${ph-8}" rx="1"/>`;}
-return c;},'CURTAIN WALL');}
-
-/* ═══════════════════════════════
-   PREVIEW SYSTEM
-═══════════════════════════════ */
+/* ═══ PREVIEW ════════════════════════════════════════ */
 function resetPreview(){
   const cv=g('mCanvas');cv.width=0;cv.height=0;cv.style.display='none';
-  g('mSVG').style.display='none';
-  g('mImg').style.display='none';
-  g('prevLoading').style.display='none';
-  g('prevErr').style.display='none';
-  g('tabPDF').style.display='none';
-  g('tabImg').style.display='none';
-  g('tabSVG').classList.add('active');
-  g('tabPDF').classList.remove('active');
-  g('tabImg').classList.remove('active');
-  g('previewBadge').textContent='Auto-generated';
-  S.previewMode='svg';
+  g('mSVG').style.display='none';g('mImg').style.display='none';
+  g('prevLoading').style.display='none';g('prevErr').style.display='none';
+  g('tabPDF').style.display='none';g('tabImg').style.display='none';
+  g('tabSVG').classList.add('active');g('tabPDF').classList.remove('active');g('tabImg').classList.remove('active');
+  g('previewBadge').textContent='Auto-generated';S.previewMode='svg';
 }
-
 function switchPreview(mode){
   S.previewMode=mode;
   g('mSVG').style.display=mode==='svg'?'block':'none';
   g('mCanvas').style.display=mode==='pdf'?'block':'none';
   g('mImg').style.display=mode==='img'?'block':'none';
-  ['SVG','PDF','Img'].forEach(m=>{
-    const el=g('tab'+m);
-    if(el)el.classList.toggle('active',m.toLowerCase()===mode);
-  });
+  ['SVG','PDF','Img'].forEach(m=>{const el=g('tab'+m);if(el)el.classList.toggle('active',m.toLowerCase()===mode);});
 }
-
 function showSVGPreview(item){
-  try{
-    g('mSVG').innerHTML=genSVG(item);
-    g('mSVG').style.display='block';
-  }catch(e){
-    g('prevErr').textContent='Could not generate schematic.';
-    g('prevErr').style.display='block';
-  }
+  try{g('mSVG').innerHTML=genSVG(item);g('mSVG').style.display='block';}catch(e){g('prevErr').textContent='Could not generate schematic.';g('prevErr').style.display='block';}
 }
-
 async function tryPDFPreview(item){
   if(!S.pdfDoc||!item._pageNo)return;
   g('prevLoading').style.display='flex';
   try{
     const page=await S.pdfDoc.getPage(item._pageNo);
     const sc=1.8,vp=page.getViewport({scale:sc});
-    const off=document.createElement('canvas');
-    off.width=vp.width;off.height=vp.height;
+    const off=document.createElement('canvas');off.width=vp.width;off.height=vp.height;
     await page.render({canvasContext:off.getContext('2d'),viewport:vp}).promise;
-
-    // Detect drawing region: left ~44% of page, split vertically for 2 items per page
     const cropW=Math.floor(vp.width*0.44);
-    // Smarter Y: item 0 = top 42%, item 1 = mid 42%, else full page
-    let yFrac=0.05,hFrac=0.42;
-    if(item._pagePos===1){yFrac=0.48;hFrac=0.42;}
-    else if(item._pagePos>1){yFrac=0.0;hFrac=0.96;}
-    const cropY=Math.floor(vp.height*yFrac);
-    const cropH=Math.floor(vp.height*hFrac);
-
-    // Confidence check: if crop too small, skip
+    const yFrac=item._pagePos===0?0.05:item._pagePos===1?0.48:0.0;
+    const hFrac=item._pagePos>1?0.96:0.42;
+    const cropY=Math.floor(vp.height*yFrac),cropH=Math.floor(vp.height*hFrac);
     if(cropW<80||cropH<80){g('prevLoading').style.display='none';return;}
-
-    const cv=g('mCanvas');
-    cv.width=cropW;cv.height=cropH;
-    cv.style.maxHeight='220px';cv.style.width='100%';cv.style.objectFit='contain';
+    const cv=g('mCanvas');cv.width=cropW;cv.height=cropH;cv.style.maxHeight='220px';cv.style.width='100%';cv.style.objectFit='contain';
     cv.getContext('2d').drawImage(off,0,cropY,cropW,cropH,0,0,cropW,cropH);
-    cv.style.display='block';
-    g('tabPDF').style.display='inline-flex';
-    g('previewBadge').textContent='PDF drawing';
-    g('prevLoading').style.display='none';
-    // Auto-switch to PDF tab
-    switchPreview('pdf');
-  }catch(e){
-    g('prevLoading').style.display='none';
-    // Stay on SVG — silent fallback
-  }
+    cv.style.display='block';g('tabPDF').style.display='inline-flex';g('previewBadge').textContent='PDF drawing';
+    g('prevLoading').style.display='none';switchPreview('pdf');
+  }catch(e){g('prevLoading').style.display='none';}
 }
-
 function loadManualImg(){
   const it=S.current;if(!it)return;
   const url=IMG_MAP[it.designName]||IMG_MAP[it.windowType]||null;
-  if(!url){
-    g('prevErr').textContent='No reference image available for this product.';
-    g('prevErr').style.display='block';return;
-  }
+  if(!url){g('prevErr').textContent='No reference image available.';g('prevErr').style.display='block';return;}
   const im=g('mImg');
   im.onload=()=>{im.style.display='block';g('prevErr').style.display='none';g('tabImg').style.display='inline-flex';switchPreview('img');};
   im.onerror=()=>{im.style.display='none';g('prevErr').textContent='Image could not be loaded.';g('prevErr').style.display='block';};
   im.src=url;
 }
 
-/* ═══════════════════════════════
-   BENEFITS ENGINE
-═══════════════════════════════ */
+/* ═══ BENEFITS ═══════════════════════════════════════ */
 function benefits(item){
-  const seen=new Set();
-  const add=(ic,t)=>{if(!seen.has(t)){seen.add(t);return{ic,t};}return null;};
-  const res=[];
-  const push=(ic,t)=>{const r=add(ic,t);if(r)res.push(r);};
-
+  const seen=new Set(),res=[];
+  const push=(ic,t)=>{if(!seen.has(t)){seen.add(t);res.push({ic,t});}};
   const gl=[item.glass,item.infill,item.infill1,item.infill2,item.infill3].filter(Boolean).join(' ').toLowerCase();
   const ty=[item.designName,item.windowType].filter(Boolean).join(' ').toLowerCase();
   const pt=(item.profileType||'').toLowerCase();
   const lk=(item.lockingType||item.bsLockType||'').toLowerCase();
-
-  // Glass — sorted by specificity
   if(/acoustic.*pvb|pvb.*acoustic/.test(gl))push('🔇','Acoustic PVB – significantly reduces external noise');
   else if(/\bdgu\b|lam\b/.test(gl))push('🌡','Double glazing – enhanced thermal insulation');
   if(/argon/.test(gl))push('⚡','Argon fill – superior energy efficiency');
   if(/eco sense|enhance spring|solar control/.test(gl))push('☀️','Solar control glass – reduces heat gain & glare');
   if(/stronglas|toughened|tempered|\bctg\b|\btg\b/.test(gl))push('🛡','AIS Stronglas – safety-grade toughened glass');
   if(/frosted|milky/.test(gl))push('🫧','Privacy glass – obscures direct view');
-  if(/tinted|bronze tinted|dark grey/.test(gl))push('🕶','Tinted glass – reduces glare & solar heat');
-  if(/georgian bar/.test(gl))push('🏛','Georgian bar grid – elegant colonial aesthetics');
-  if(/laminated|lam\b/.test(gl)&&!/dgu/.test(gl))push('🛡','Laminated glass – holds together on breakage');
-
-  // Hardware
-  if(item.mesh==='Yes')push('🦟','Insect mesh – protection from mosquitoes & insects');
+  if(/tinted|bronze|dark grey tinted/.test(gl))push('🕶','Tinted glass – reduces glare & solar heat');
+  if(/georgian bar/.test(gl))push('🏛','Georgian bar – elegant colonial aesthetics');
+  if(item.mesh==='Yes')push('🦟','Insect mesh – protection from mosquitoes & flies');
   if(/multi.?point|mvd|cremone/.test(lk))push('🔐','Multi-point locking – high security');
-
-  // Window type benefits
-  if(/tilt.{0,6}turn/.test(ty))push('💨','Tilt & turn – dual-mode: tilt for air, turn for cleaning');
-  else if(/casement/.test(ty)&&!/door/.test(ty))push('🌬','Casement – excellent seal & controlled ventilation');
-  if(/twin.?sash/.test(ty))push('💨','Twin sash – top & bottom panels for flexible ventilation');
-  if(/sliding/.test(ty)&&!/door/.test(ty))push('📐','Sliding – space-efficient, no swing clearance needed');
+  if(/tilt.{0,6}turn/.test(ty))push('💨','Tilt & turn – dual-mode flexible ventilation');
+  else if(/casement/.test(ty)&&!/door/.test(ty))push('🌬','Casement – excellent seal & ventilation');
+  if(/twin.?sash/.test(ty))push('💨','Twin sash – top & bottom ventilation');
+  if(/sliding/.test(ty)&&!/door/.test(ty))push('📐','Sliding – space-efficient, no swing needed');
   if(/sliding door|slider door/.test(ty))push('🚪','Sliding door – wide opening, indoor-outdoor flow');
-  if(/slide.{0,6}fold|s and f/.test(ty))push('🚪','Slide & fold – full wall opening, flood of natural light');
-  if(/bay/.test(ty))push('✨','Bay window – panoramic views & premium aesthetics');
-  if(/corner|g2g/.test(ty))push('🏗','Glass-to-glass corner – unobstructed wrap-around view');
-  if(/arch/.test(ty))push('🏛','Arch window – distinctive architectural statement');
-  if(/curtain.?wall|^cw$/.test(ty))push('🏢','Curtain wall – maximum glazed facade, flood of daylight');
-  if(/louv|louvre/.test(ty))push('🌀','Louvre – directional ventilation with light control');
-
-  // Profile
-  if(/upvc|pvc/.test(pt))push('🔧','uPVC – termite-proof, low maintenance, weather resistant');
-  if(/alumin/.test(pt))push('💪','Aluminium – high strength with slim, modern sight lines');
-
-  // Area
-  if((parseFloat(item.area)||0)>3)push('🌅','Large glazed area – maximises natural light & views');
-
-  return res.slice(0,6);// cap at 6 benefits
+  if(/slide.{0,6}fold|s and f/.test(ty))push('🚪','Slide & fold – full wall opening');
+  if(/bay/.test(ty))push('✨','Bay window – panoramic views & premium look');
+  if(/corner|g2g/.test(ty))push('🏗','Glass-to-glass corner – unobstructed panoramic view');
+  if(/arch/.test(ty))push('🏛','Arch window – premium architectural statement');
+  if(/curtain.?wall|^cw$/.test(ty))push('🏢','Curtain wall – maximum facade glazing');
+  if(/louv|louvre/.test(ty))push('🌀','Louvre – directional ventilation & light control');
+  if(/upvc|pvc/.test(pt))push('🔧','uPVC – termite-proof, low maintenance');
+  if(/alumin/.test(pt))push('💪','Aluminium – high strength, slim sight lines');
+  if((parseFloat(item.area)||0)>3)push('🌅','Large glazed area – maximises natural light');
+  return res.slice(0,6);
 }
 
-/* ═══════════════════════════════
-   SPEECH
-═══════════════════════════════ */
+/* ═══ SPEECH ══════════════════════════════════════════ */
 function buildSpeech(item){
-  const bens=benefits(item).map(b=>b.t).join('; ');
   const pm=item.profileMaterial||'uPVC';
   const ty=item.windowType||'window';
   const wh=item.width&&item.height?`width ${item.width} millimetres and height ${item.height} millimetres, `:'';
   const ar=item.area?`area ${item.area} square metres, `:'';
+  const color=item.profileColor?`${item.profileColor} colour profile, `:'';
   const gl=item.glass?`The glass is ${item.glass}. `:'';
-  const ms=item.mesh==='Yes'?'Insect mesh is included. ':'';
-  const lk=item.lockingType&&!/^n\/a$/i.test(item.lockingType)?`It has ${item.lockingType}. `:'';
-  return`Item ${item.slNo}. This is ${/^[aeiou]/i.test(pm)?'an':'a'} ${pm} ${ty}, ${wh}${ar}${item.series?'series '+item.series+'. ':''}${gl}${ms}${lk}${bens?'Key benefits: '+bens+'.':''}`.replace(/\s+/g,' ').trim();
+  const ms=item.mesh==='Yes'?`Insect mesh: ${item.meshType||'included'}. `:'';
+  const lk=item.lockingType&&!/^n\/a$/i.test(item.lockingType)?`${item.lockingType} locking system. `:'';
+  const bens=benefits(item).slice(0,3).map(b=>b.t).join('; ');
+  return`Item ${item.slNo}. This is ${/^[aeiou]/i.test(pm)?'an':'a'} ${pm} ${ty}, ${wh}${ar}${item.series?'series '+item.series+'. ':''}${color}${gl}${ms}${lk}${bens?'Key benefits: '+bens+'.':''}`.replace(/\s+/g,' ').trim();
 }
-
 function speakItem(item,btn){
   if(!('speechSynthesis' in window)){toast('Speech not supported in this browser','err');return;}
+  const wasBtn=S.speakBtn;
   if(S.speaking){
-    speechSynthesis.cancel();S.speaking=false;
+    speechSynthesis.cancel();S.speaking=false;S.speakBtn=null;
     document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));
-    if(S.speakBtn===btn)return;
+    if(wasBtn===btn)return;
   }
   const utt=new SpeechSynthesisUtterance(buildSpeech(item));
   utt.rate=0.95;utt.pitch=1;
   const done=()=>{S.speaking=false;S.speakBtn=null;document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));};
   utt.onend=done;utt.onerror=done;
-  S.speaking=true;S.speakBtn=btn;
-  if(btn)btn.classList.add('on');
+  S.speaking=true;S.speakBtn=btn;if(btn)btn.classList.add('on');
   speechSynthesis.speak(utt);
 }
 function speakCurrent(){if(S.current)speakItem(S.current,g('mSpeakBtn'));}
 
-/* ═══════════════════════════════
-   FILTERS
-═══════════════════════════════ */
+/* ═══ FILTERS ════════════════════════════════════════ */
 function applyFilters(){
   const q=(g('fSearch').value||'').toLowerCase();
   const ty=g('fType').value.toLowerCase();
   const pr=g('fProfile').value.toLowerCase();
   const ms=g('fMesh').value.toLowerCase();
   S.filtered=S.items.filter(it=>{
-    if(q){
-      const h=[it.designName,it.profileType,it.glass,it.windowType,it.designRef,it.lockingType,it.handleType,it.series].filter(Boolean).join(' ').toLowerCase();
-      if(!h.includes(q))return false;
-    }
+    if(q){const h=[it.designName,it.profileType,it.glass,it.windowType,it.series,it.lockingType,it.handleType,it.profileColor,it.silicon].filter(Boolean).join(' ').toLowerCase();if(!h.includes(q))return false;}
     if(ty&&!(it.windowType||'').toLowerCase().includes(ty))return false;
-    if(pr){
-      const pm=(it.profileMaterial||'').toLowerCase();
-      if(pr==='upvc'&&!/upvc|pvc/.test(pm))return false;
-      if(pr==='alum'&&!/alumin/.test(pm))return false;
-    }
-    if(ms){
-      const m=(it.mesh||'').toLowerCase();
-      if(ms==='yes'&&m!=='yes')return false;
-      if(ms==='no'&&m==='yes')return false;
-    }
+    if(pr){const pm=(it.profileMaterial||'').toLowerCase();if(pr==='upvc'&&!/upvc|pvc/.test(pm))return false;if(pr==='alum'&&!/alumin/.test(pm))return false;}
+    if(ms){const m=(it.mesh||'').toLowerCase();if(ms==='yes'&&m!=='yes')return false;if(ms==='no'&&m==='yes')return false;}
     return true;
   });
-  renderCards();
-  g('fCount').textContent=`${S.filtered.length} of ${S.items.length} shown`;
+  renderCards();g('fCount').textContent=`${S.filtered.length} of ${S.items.length} shown`;
 }
 
-/* ═══════════════════════════════
-   RENDER — CARDS
-═══════════════════════════════ */
+/* ═══ CARDS ══════════════════════════════════════════ */
 function renderCards(){
   const grid=g('cardsGrid'),empty=g('emptyFilter');
   if(!S.filtered.length){grid.innerHTML='';empty.style.display='block';return;}
-  empty.style.display='none';
-  grid.innerHTML=S.filtered.map(cardHTML).join('');
+  empty.style.display='none';grid.innerHTML=S.filtered.map(cardHTML).join('');
 }
-
 function cardHTML(it){
   const isAlum=/alumin/i.test(it.profileMaterial||'');
-  const pmCls=isAlum?'chip-alum':'chip-upvc';
-  const barCls=isAlum?'card-alum':'card-upvc';
+  const pmCls=isAlum?'chip-alum':'chip-upvc',barCls=isAlum?'card-alum':'card-upvc';
   const pm=it.profileMaterial||'uPVC';
-  const dims=(it.width&&it.height)?`${it.width} × ${it.height}`:'—';
-  const area=it.area?`${it.area} m²`:'';
-  const wt=it.weight?`${it.weight} kg`:'';
+  const dims=(it.width&&it.height)?`${it.width}×${it.height}`:'—';
+  const area=it.area?`${it.area}m²`:'',wt=it.weight?`${it.weight}kg`:'';
   const glFull=(it.glass||'No glass data').replace(/\s+/g,' ');
-  const gl60=glFull.length>62?glFull.slice(0,62)+'…':glFull;
+  const gl60=glFull.length>60?glFull.slice(0,60)+'…':glFull;
   const amt=it.amount?'₹'+Number(it.amount).toLocaleString('en-IN'):'—';
   const bens=benefits(it).slice(0,3);
-  const seriesShort=it.series?it.series.replace(/^AIS\s+/i,'').replace(/\s*SERIES\s*$/i,'').trim():'';
   return`<div class="item-card ${barCls}" onclick="openModal(${it.slNo})">
 <div class="c-head"><div class="c-num">${it.slNo}</div><div class="c-head-r">
 <div class="c-title">${esc(it.designName||it.designRef||'Window Item')}</div>
-<div class="c-chips">
-<span class="chip ${pmCls}">${esc(pm)}</span>
-${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}
-${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}
-</div></div></div>
+<div class="c-chips"><span class="chip ${pmCls}">${esc(pm)}</span>${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}${it.profileColor?`<span class="chip chip-type" style="opacity:.75">${esc(it.profileColor)}</span>`:''}${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}</div></div></div>
 <div class="c-dims"><span class="c-dim-v">${dims} mm</span>${area?`<span class="c-sep">·</span><span>${area}</span>`:''}${wt?`<span class="c-sep">·</span><span>${wt}</span>`:''}</div>
 <div class="c-glass"><span class="c-glass-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><polyline points="17 2 12 7 7 2"/></svg></span><span>${esc(gl60)}</span></div>
 ${bens.length?`<div class="c-benefits">${bens.map(b=>`<span class="btag">${b.ic} ${esc(b.t)}</span>`).join('')}</div>`:''}
-<div class="c-foot">
-<div class="c-price">${esc(amt)}<span class="c-qty"> ×${it.qty}</span></div>
-<div class="c-acts">
-<button class="btn btn-speak btn-sm" onclick="event.stopPropagation();cardSpeak(${it.slNo},this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Speak</button>
-<button class="btn btn-sm" onclick="event.stopPropagation();openModal(${it.slNo})">Details</button>
-</div></div></div>`;
+<div class="c-foot"><div class="c-price">${esc(amt)}<span class="c-qty"> ×${it.qty}</span></div>
+<div class="c-acts"><button class="btn btn-speak btn-sm" onclick="event.stopPropagation();cardSpeak(${it.slNo},this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Speak</button>
+<button class="btn btn-sm" onclick="event.stopPropagation();openModal(${it.slNo})">Details</button></div></div></div>`;
 }
 function cardSpeak(slNo,btn){const it=S.items.find(i=>i.slNo===slNo);if(it)speakItem(it,btn);}
 
-/* ═══════════════════════════════
-   MODAL
-═══════════════════════════════ */
+/* ═══ MODAL ══════════════════════════════════════════ */
 function openModal(slNo){
   try{
     const it=S.items.find(i=>i.slNo===slNo);if(!it)return;
     S.current=it;
     const isAlum=/alumin/i.test(it.profileMaterial||'');
     g('mTitle').textContent=it.designName||it.designRef||`Item ${it.slNo}`;
-    g('mChips').innerHTML=`
-<span class="chip ${isAlum?'chip-alum':'chip-upvc'}">${esc(it.profileMaterial||'uPVC')}</span>
-${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}
-${it.profileType?`<span class="chip chip-type">${esc(it.profileType)}</span>`:''}
-${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}`;
-
-    resetPreview();
-    showSVGPreview(it);
+    g('mChips').innerHTML=`<span class="chip ${isAlum?'chip-alum':'chip-upvc'}">${esc(it.profileMaterial||'uPVC')}</span>${it.windowType?`<span class="chip chip-type">${esc(it.windowType)}</span>`:''}${it.series?`<span class="chip chip-type">${esc(it.series.replace(/^AIS\s+/i,'').replace(/\s*SERIES\s*$/i,'').trim())}</span>`:''}${it.mesh==='Yes'?'<span class="chip chip-mesh">Mesh ✓</span>':''}`;
+    resetPreview();showSVGPreview(it);
     if(IMG_MAP[it.designName]||IMG_MAP[it.windowType])g('tabImg').style.display='inline-flex';
-    tryPDFPreview(it);// async, non-blocking
+    tryPDFPreview(it);
 
-    const flds=[
-      ['Design Ref',it.designRef||null],
-      ['Series',it.series||null],
+    const basicFlds=[
+      ['Design Ref',it.designRef||null],['Series',it.series||null],
       ['Window / Door Type',it.windowType||null],
-      ['Profile Type',it.profileType||null],
-      ['Profile Color',it.profileColor||null],
-      ['Width (mm)',it.width||null],
-      ['Height (mm)',it.height||null],
-      ['Area (m²)',it.area||null],
-      ['Area (sqft)',it.areaSqft||null],
-      ['Weight (kg)',it.weight||null],
-      ['Quantity',it.qty],
+      ['Width (mm)',it.width||null],['Height (mm)',it.height||null],
+      ['Area (m²)',it.area||null],['Area (sqft)',it.areaSqft||null],
+      ['Weight (kg)',it.weight||null],['Quantity',it.qty],
       ['Glass / Infill',it.glass||null,'span-all'],
       ['Mesh',it.mesh||null],
-      ['Mesh Type',it.meshType||null],
-      ['Handle Type',it.handleType||null],
-      ['Handle Color',it.handleColor||null],
-      ['Locking Type',it.lockingType||null],
-      ['Fittings Supplier',it.fittingsSupplier||null],
-      ['Seal Type',it.sealType||null],
       ['Rate (INR)',it.rate?'₹'+Number(it.rate).toLocaleString('en-IN'):null,'','hl'],
       ['Amount (INR)',it.amount?'₹'+Number(it.amount).toLocaleString('en-IN'):null,'','hl'],
     ].filter(([,v])=>v!=null&&v!=='');
 
+    const specGroups=[
+      {title:'Profile &amp; Finish',fields:[
+        ['Profile Type',it.profileType],['Profile Color',it.profileColor],
+        ['Silicon / Sealant',it.silicon],['Seal Type',it.sealType],
+      ].filter(([,v])=>v)},
+      {title:'Hardware &amp; Locking',fields:[
+        ['Handle Type',it.handleType],['Flymesh Handle',it.flymeshHandle],
+        ['Handle Color',it.handleColor],['Handle Height',it.handleHeight],
+        ['Locking Type',it.lockingType],['BS Locking Type',it.bsLockType],
+        ['Friction Stay',it.frictionStay],['Cylinder',it.cylinder],['Hinge',it.hinge],
+        ['Fittings Supplier',it.fittingsSupplier],
+      ].filter(([,v])=>v)},
+      {title:'Mesh &amp; Accessories',fields:[
+        ['Mesh Type (Detail)',it.meshType],['Coupler',it.coupler],
+      ].filter(([,v])=>v)},
+      {title:'Structural Members',fields:[
+        ['Track',it.track],['Sliding Sash',it.slidingSash],
+        ['Casement Sash',it.casementSash],['Outer Frame',it.outerFrame],
+        ['Frame',it.frame],['Sash',it.sash],['Mullion',it.mullion],
+      ].filter(([,v])=>v)},
+    ].filter(grp=>grp.fields.length>0);
+
     const bens=benefits(it);
+
     g('mBody').innerHTML=`
 <div class="m-section"><div class="m-sec-title">Product Specifications</div>
-<div class="detail-grid">${flds.map(([lbl,val,span,cls])=>`<div class="d-item${span?' '+span:''}"><span class="d-lbl">${esc(lbl)}</span><span class="d-val${cls?' '+cls:''}">${esc(String(val))}</span></div>`).join('')}</div></div>
+<div class="detail-grid">${basicFlds.map(([lbl,val,span,cls])=>`<div class="d-item${span?' '+span:''}"><span class="d-lbl">${esc(lbl)}</span><span class="d-val${cls?' '+cls:''}">${esc(String(val))}</span></div>`).join('')}</div></div>
 ${bens.length?`<div class="m-section"><div class="m-sec-title">Benefits &amp; Value Proposition</div><div class="benefits-list">${bens.map(b=>`<div class="b-item"><span class="b-ic">${b.ic}</span><span>${esc(b.t)}</span></div>`).join('')}</div></div>`:''}
+${specGroups.map(grp=>`<div class="m-section"><div class="m-sec-title spec-group-title">${grp.title}</div><div class="detail-grid">${grp.fields.map(([lbl,val])=>`<div class="d-item"><span class="d-lbl">${esc(lbl)}</span><span class="d-val" style="font-size:12px;word-break:break-word">${esc(String(val))}</span></div>`).join('')}</div></div>`).join('')}
 ${it.remarks?`<div class="m-section"><div class="m-sec-title">Remarks</div><p style="font-size:13px;color:var(--t2);line-height:1.6">${esc(it.remarks)}</p></div>`:''}`;
 
-    g('modalBg').classList.add('open');
-    document.body.style.overflow='hidden';
-  }catch(e){
-    console.error('openModal error',e);
-    toast('Could not open item details','err');
-  }
+    g('modalBg').classList.add('open');document.body.style.overflow='hidden';
+  }catch(e){console.error('openModal:',e);toast('Could not open item details','err');}
 }
-
 function closeModal(){
-  g('modalBg').classList.remove('open');
-  document.body.style.overflow='';
+  g('modalBg').classList.remove('open');document.body.style.overflow='';
   if(S.speaking){speechSynthesis.cancel();S.speaking=false;}
-  document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));
-  S.current=null;
+  document.querySelectorAll('.btn-speak').forEach(b=>b.classList.remove('on'));S.current=null;
 }
 g('modalBg').addEventListener('click',e=>{if(e.target===g('modalBg'))closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-/* ═══════════════════════════════
-   SUMMARY STRIP
-═══════════════════════════════ */
+/* ═══ SUMMARY STRIP ══════════════════════════════════ */
 function updateSummary(items){
   const totArea=items.reduce((s,i)=>s+(parseFloat(i.area)||0)*(i.qty||1),0);
   const totWt=items.reduce((s,i)=>s+(parseFloat(i.weight)||0)*(i.qty||1),0);
   const totVal=items.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
   const upvcCnt=items.filter(i=>!/alumin/i.test(i.profileMaterial||'')).length;
   const alumCnt=items.filter(i=>/alumin/i.test(i.profileMaterial||'')).length;
-  g('sItems').textContent=items.length;
-  g('sArea').textContent=totArea.toFixed(2);
+  g('sItems').textContent=items.length;g('sArea').textContent=totArea.toFixed(2);
   g('sWeight').textContent=Math.round(totWt);
   g('sValue').textContent=totVal>0?'₹'+Math.round(totVal).toLocaleString('en-IN'):'—';
   const mix=g('sMix');mix.innerHTML='';
   if(upvcCnt)mix.innerHTML+=`<span class="chip chip-upvc">${upvcCnt} uPVC</span>`;
   if(alumCnt)mix.innerHTML+=`<span class="chip chip-alum">${alumCnt} Alum</span>`;
-  show('sumStrip');show('filtersBar');
-  g('cardsSection').style.display='block';
-  g('emptyInit').style.display='none';
+  show('sumStrip');show('filtersBar');g('cardsSection').style.display='block';g('emptyInit').style.display='none';
 }
 
-/* ═══════════════════════════════
-   LOAD FLOW
-═══════════════════════════════ */
+/* ═══ LOAD FLOW ══════════════════════════════════════ */
 async function handleFile(file){
   if(!file||!file.name.toLowerCase().endsWith('.pdf')){setStatus('err','Please select a valid PDF file.');return;}
   setStatus('loading',`Reading "${file.name}"…`);
   try{
-    const raw=await extractPDF(file);
+    const extracted=await extractPDF(file);
     setStatus('loading','Parsing quotation line items…');
-    const items=parseQuotation(raw);
-    if(!items.length){
-      setStatus('err','No line items found. Please check this is an AIS Windows PI or quotation PDF.');
-      return;
-    }
+    const items=parseQuotation(extracted);
+    if(!items.length){setStatus('err','No line items found. Please ensure this is an AIS Windows PI or quotation PDF.');return;}
     const partial=items.filter(i=>!i.designName||!(i.width>0)).length;
+    // Diagnostic dump — visible in console (F12) for debugging
+    console.log('[AIS] Parsed items summary:');
+    items.forEach(it=>console.log('  #'+it.slNo+' "'+it.designName+'" handle="'+it.handleType+'" mesh="'+it.meshType+'" silicon="'+it.silicon+'"'));
+    console.log('[AIS] Zone A lines: '+(extracted.zoneA||[]).length+' Zone B: '+(extracted.zoneB||[]).length+' Zone C: '+(extracted.zoneC||[]).length);
     loadItems(items);
-    if(partial>0&&partial<items.length){
-      setStatus('ok',`✓ Parsed ${items.length} items (${partial} partially — check details).`);
-    }else{
-      setStatus('ok',`✓ Parsed ${items.length} line items successfully.`);
-    }
+    setStatus('ok',partial>0&&partial<items.length?`✓ Parsed ${items.length} items (${partial} with limited data).`:`✓ Parsed ${items.length} line items successfully.`);
     toast(`${items.length} items loaded`,'ok');
-  }catch(e){
-    console.error(e);
-    setStatus('err','Error reading PDF: '+(e.message||'Unknown error. Try re-uploading.'));
-  }
+  }catch(e){console.error(e);setStatus('err','Error: '+(e.message||'Unknown error. Try re-uploading.'));}
 }
-
-function loadItems(items){
-  S.items=items;S.filtered=[...items];
-  updateSummary(items);applyFilters();
-}
-
+function loadItems(items){S.items=items;S.filtered=[...items];updateSummary(items);applyFilters();}
 function loadDemo(){
   S.pdfDoc=null;
   const items=DEMO.map(d=>{const c=Object.assign({},d);try{finalizeItem(c);}catch(e){}return c;});
-  loadItems(items);
-  setStatus('ok',`✓ Demo quotation loaded – ${items.length} items.`);
+  loadItems(items);setStatus('ok',`✓ Demo quotation loaded – ${items.length} items.`);
 }
 
-/* ═══════════════════════════════
-   EXPORT & COPY
-═══════════════════════════════ */
+/* ═══ EXPORTS ════════════════════════════════════════ */
 function download(content,name,type){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([content],{type}));
-  a.download=name;a.click();
-  URL.revokeObjectURL(a.href);
-  toast(`Downloaded ${name}`,'ok');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href);toast(`Downloaded ${name}`,'ok');
 }
 function doExportJSON(){
   if(!S.filtered.length){toast('No data to export','err');return;}
-  // Strip internal fields from export
-  const clean=S.filtered.map(i=>{const c=Object.assign({},i);delete c._pageNo;delete c._pagePos;delete c._conf;delete c._src;return c;});
+  const clean=S.filtered.map(i=>{const c=Object.assign({},i);['_pageNo','_pagePos','_conf','_src'].forEach(k=>delete c[k]);return c;});
   download(JSON.stringify(clean,null,2),'ais-quotation.json','application/json');
 }
 function doExportCSV(){
   if(!S.filtered.length){toast('No data to export','err');return;}
-  const H=['Sl.No.','Design Name','Type','Series','Profile Material','Profile Type','Profile Color','Width mm','Height mm','Area m²','Area sqft','Weight kg','Glass','Mesh','Mesh Type','Handle','Handle Color','Locking','Fittings','Qty','Rate INR','Amount INR','Remarks'];
-  const R=S.filtered.map(i=>[i.slNo,i.designName||'',i.windowType||'',i.series||'',i.profileMaterial||'',i.profileType||'',i.profileColor||'',i.width||'',i.height||'',i.area||'',i.areaSqft||'',i.weight||'',i.glass||'',i.mesh||'',i.meshType||'',i.handleType||'',i.handleColor||'',i.lockingType||'',i.fittingsSupplier||'',i.qty||'',i.rate||'',i.amount||'',i.remarks||'']);
+  const H=['Sl.No.','Design Name','Type','Series','Profile Material','Profile Type','Profile Color','Silicon','Width mm','Height mm','Area m²','Area sqft','Weight kg','Glass','Mesh','Mesh Type','Handle Type','Flymesh Handle','Handle Color','Handle Height','Locking Type','BS Locking Type','Friction Stay','Cylinder','Hinge','Coupler','Mullion','Track','Sliding Sash','Casement Sash','Outer Frame','Frame','Sash','Fittings Supplier','Seal Type','Qty','Rate INR','Amount INR','Remarks'];
+  const R=S.filtered.map(i=>[i.slNo,i.designName||'',i.windowType||'',i.series||'',i.profileMaterial||'',i.profileType||'',i.profileColor||'',i.silicon||'',i.width||'',i.height||'',i.area||'',i.areaSqft||'',i.weight||'',i.glass||'',i.mesh||'',i.meshType||'',i.handleType||'',i.flymeshHandle||'',i.handleColor||'',i.handleHeight||'',i.lockingType||'',i.bsLockType||'',i.frictionStay||'',i.cylinder||'',i.hinge||'',i.coupler||'',i.mullion||'',i.track||'',i.slidingSash||'',i.casementSash||'',i.outerFrame||'',i.frame||'',i.sash||'',i.fittingsSupplier||'',i.sealType||'',i.qty||'',i.rate||'',i.amount||'',i.remarks||'']);
   const csv=[H,...R].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   download(csv,'ais-quotation.csv','text/csv');
 }
 function doCopyAll(){
   if(!S.filtered.length){toast('No data to copy','err');return;}
-  const txt=S.filtered.map(i=>{
-    const b=benefits(i).map(b=>b.t).join(', ');
-    return`Item ${i.slNo}: ${i.designName||''} | ${i.profileMaterial||''} | ${i.width}×${i.height}mm | ₹${(i.amount||0).toLocaleString('en-IN')}\nGlass: ${i.glass||''}\nBenefits: ${b}`;
-  }).join('\n\n');
-  navigator.clipboard.writeText(txt).then(()=>toast('Copied to clipboard','ok')).catch(()=>toast('Copy failed','err'));
+  const txt=S.filtered.map(i=>{const b=benefits(i).map(b=>b.t).join(', ');return`Item ${i.slNo}: ${i.designName||''} | ${i.profileMaterial||''} | ${i.width}×${i.height}mm | ₹${(i.amount||0).toLocaleString('en-IN')}\nGlass: ${i.glass||''}\nHandle: ${i.handleType||'—'} | Lock: ${i.lockingType||'—'}\nBenefits: ${b}`;}).join('\n\n');
+  navigator.clipboard.writeText(txt).then(()=>toast('Copied','ok')).catch(()=>toast('Copy failed','err'));
 }
 function copyCurrentSummary(){
   if(!S.current)return;
   navigator.clipboard.writeText(buildSpeech(S.current)).then(()=>toast('Copied','ok')).catch(()=>toast('Failed','err'));
 }
 
-/* ═══════════════════════════════
-   THEME
-═══════════════════════════════ */
+/* ═══ THEME ══════════════════════════════════════════ */
 function toggleTheme(){
   const dark=document.documentElement.dataset.theme==='dark';
   document.documentElement.dataset.theme=dark?'light':'dark';
-  g('themeIco').innerHTML=dark
-    ?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
-    :'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  g('themeIco').innerHTML=dark?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>':'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
 }
 
-/* ═══════════════════════════════
-   EVENTS
-═══════════════════════════════ */
-g('pdfInput').addEventListener('change',e=>{
-  if(e.target.files[0])handleFile(e.target.files[0]);
-  e.target.value='';
-});
+/* ═══ EVENTS ══════════════════════════════════════════ */
+g('pdfInput').addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);e.target.value='';});
 const dz=g('dropZone');
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
 dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-dz.addEventListener('drop',e=>{
-  e.preventDefault();dz.classList.remove('over');
-  const f=e.dataTransfer.files[0];if(f)handleFile(f);
-});
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+
+/* ═══ INIT ═══════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded',()=>_initPWA(),{once:true});
 </script>
 </body>
 </html>
